@@ -45,9 +45,7 @@ general practice and justified afterwards.
   related decisions surrounding the change.
 - `search_memory(query)` — when the diff raises a specific topic (a
   dependency, a pattern, a subsystem) and you want to know what has been
-  written about it. A hyphen in the query currently fails with a SQL error
-  (known kernel limitation); split hyphenated names into separate words —
-  `engineering mcp`, not `engineering-mcp`.
+  written about it.
 
 Snippets are short — 40 to 200 characters, enough to judge relevance and not
 enough to quote. When a rule or ADR actually bears on the change, open the

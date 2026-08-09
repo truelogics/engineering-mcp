@@ -46,7 +46,7 @@ func Resolve(flagValue, workingDir string) (Resolved, error) {
 	if strings.TrimSpace(flagValue) != "" {
 		dir, err := filepath.Abs(flagValue)
 		if err != nil {
-			return Resolved{}, err
+			return Resolved{}, fmt.Errorf("workspace: --workspace %q: %w", flagValue, err)
 		}
 		if !IsIndexed(dir) {
 			return Resolved{}, notIndexed(dir, SourceFlag)
@@ -54,14 +54,22 @@ func Resolve(flagValue, workingDir string) (Resolved, error) {
 		return Resolved{Dir: dir, Source: SourceFlag}, nil
 	}
 
-	if dir, ok := findUpward(workingDir); ok {
+	// Resolved here rather than inside findUpward: an unreadable working
+	// directory is its own failure, and reporting it as "no workspace
+	// found" would send the developer to `eng workspace create` for a
+	// problem that has nothing to do with indexing.
+	start, err := filepath.Abs(workingDir)
+	if err != nil {
+		return Resolved{}, fmt.Errorf("workspace: working directory %q: %w", workingDir, err)
+	}
+	if dir, ok := findUpward(start); ok {
 		return Resolved{Dir: dir, Source: SourceWalkUp}, nil
 	}
 
 	if env := strings.TrimSpace(os.Getenv(EnvVar)); env != "" {
 		dir, err := filepath.Abs(env)
 		if err != nil {
-			return Resolved{}, err
+			return Resolved{}, fmt.Errorf("workspace: $%s=%q: %w", EnvVar, env, err)
 		}
 		if !IsIndexed(dir) {
 			return Resolved{}, notIndexed(dir, SourceEnv)
@@ -70,7 +78,7 @@ func Resolve(flagValue, workingDir string) (Resolved, error) {
 	}
 
 	return Resolved{}, fmt.Errorf(
-		"no indexed workspace found at or above %s, and %s is not set.\n\n"+
+		"workspace: no indexed workspace found at or above %s, and %s is not set.\n\n"+
 			"To index this project:\n"+
 			"    cd %s\n"+
 			"    eng workspace create .\n"+
@@ -80,14 +88,11 @@ func Resolve(flagValue, workingDir string) (Resolved, error) {
 		workingDir, EnvVar, workingDir, EnvVar)
 }
 
-// findUpward walks from dir toward the filesystem root looking for an
-// indexed workspace. The nearest one wins: a workspace inside a
-// monorepo is a more specific answer than one containing it.
+// findUpward walks from dir, which must be absolute, toward the
+// filesystem root looking for an indexed workspace. The nearest one
+// wins: a workspace inside a monorepo is a more specific answer than one
+// containing it.
 func findUpward(dir string) (string, bool) {
-	dir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", false
-	}
 	for {
 		if IsIndexed(dir) {
 			return dir, true
@@ -110,5 +115,5 @@ func IsIndexed(dir string) bool {
 }
 
 func notIndexed(dir string, src Source) error {
-	return fmt.Errorf("no indexed workspace at %s (from %s) — run `eng workspace create .` and `eng workspace attach <repo>` there first", dir, src)
+	return fmt.Errorf("workspace: no indexed workspace at %s (from %s) — run `eng workspace create .` and `eng workspace attach <repo>` there first", dir, src)
 }

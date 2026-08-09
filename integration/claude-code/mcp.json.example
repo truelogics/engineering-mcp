@@ -2,10 +2,9 @@
   "mcpServers": {
     "engineering": {
       "command": "/absolute/path/to/engineering-mcp",
-      "args": [
-        "--workspace",
-        "/absolute/path/to/your/indexed/workspace"
-      ]
+      "env": {
+        "ENGINEERING_WORKSPACE": "/absolute/path/to/your/indexed/workspace"
+      }
     }
   }
 }

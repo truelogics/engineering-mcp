@@ -55,18 +55,52 @@ Attach only repositories whose documents are true statements about the
 organization. Benchmark fixtures and example projects contain plausible
 ADRs that were never decided, and a review cannot tell them from real ones.
 
-**3. Register the server.**
+**3. Register the server once, for every project.**
 
-Copy `mcp.json.example` to `.mcp.json` at your project root and fill in
-the two absolute paths. Claude Code will ask you to approve it the first
-time you start a session there.
+```bash
+claude mcp add engineering --scope user \
+  -e ENGINEERING_WORKSPACE=/path/to/your/workspace-root \
+  -- ~/.local/bin/engineering-mcp
+```
+
+No `--workspace` argument. The server resolves one at startup, in order
+of how specific the instruction was:
+
+1. an explicit `--workspace`, if you pass one;
+2. the nearest workspace at or above the directory you started Claude
+   Code in — so a project with its own `.eng/` serves its own knowledge;
+3. `$ENGINEERING_WORKSPACE`, so the organization's rulebook follows you
+   into projects that are not themselves indexed.
+
+It prints which workspace answered, and why, to stderr. Check there
+first when a review cites something unexpected.
+
+Project scope works too, if you would rather commit the configuration:
+copy `mcp.json.example` to `.mcp.json` at your project root. Claude Code
+asks you to approve it the first time you start a session there.
 
 **4. Install the command.**
 
 ```bash
-mkdir -p .claude/commands
-cp review-branch.md .claude/commands/
+cp review-branch.md ~/.claude/commands/      # every project
+# or: cp review-branch.md .claude/commands/  # this project only
 ```
+
+Then `/review-branch`, or just ask to review the current branch.
+
+## A hazard worth knowing about
+
+Resolution takes the *nearest* workspace, which is usually what you want
+and is occasionally a trap. A `.eng/` left inside a single repository —
+from an older setup, or an experiment — wins over the workspace above it,
+and a workspace holding only your application has no rulebook. Its answer
+is "No engineering rule governs these files", stated with complete
+confidence.
+
+Three such directories were found on the author's machine during Sprint 11,
+holding 64 documents and zero rules between them. If rules come back empty
+when you expect some, run `eng workspace list` and check which workspace
+answered.
 
 ## Use
 

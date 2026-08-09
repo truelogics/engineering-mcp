@@ -30,7 +30,7 @@ func (f *fakeSource) ContextFor(ctx context.Context, task string, opts memory.Co
 
 func toolNamed(t *testing.T, src KnowledgeSource, name string) func(context.Context, json.RawMessage) (string, error) {
 	t.Helper()
-	for _, tool := range All(src) {
+	for _, tool := range All(src, "") {
 		if tool.Name == name {
 			return tool.Handler
 		}
@@ -41,7 +41,7 @@ func toolNamed(t *testing.T, src KnowledgeSource, name string) func(context.Cont
 
 func TestExposesOnlyRuleSixApprovedTools(t *testing.T) {
 	var names []string
-	for _, tool := range All(&fakeSource{}) {
+	for _, tool := range All(&fakeSource{}, "") {
 		names = append(names, tool.Name)
 	}
 	want := []string{"search_memory", "get_context", "find_engineering_rules", "verify_evidence"}
@@ -51,7 +51,7 @@ func TestExposesOnlyRuleSixApprovedTools(t *testing.T) {
 }
 
 func TestEveryToolAdvertisesADescriptionAndSchema(t *testing.T) {
-	for _, tool := range All(&fakeSource{}) {
+	for _, tool := range All(&fakeSource{}, "") {
 		if len(tool.Description) < 40 {
 			t.Errorf("%s: description is too thin for a model to choose the tool by", tool.Name)
 		}
@@ -155,6 +155,33 @@ func TestFindEngineeringRulesSaysSoWhenNoneApply(t *testing.T) {
 	// reader, so the message has to name the second one.
 	if !strings.Contains(got, "eng workspace list") {
 		t.Errorf("output must say how to check that a rulebook was actually consulted:\n%s", got)
+	}
+}
+
+// TestFindEngineeringRulesNamesTheWorkspaceThatAnswered: rules resolve
+// from whichever workspace the server found, and a stale one holding a
+// handful of wrong rules answers with exactly the confidence of a
+// correct one. Naming the source is what makes the two distinguishable.
+func TestFindEngineeringRulesNamesTheWorkspaceThatAnswered(t *testing.T) {
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/go-wrap-errors.md", Repository: "engineering", Snippet: "wrap with %w"},
+	}}}
+	var handler = func() func(context.Context, json.RawMessage) (string, error) {
+		for _, tool := range All(src, "/somewhere/workspace") {
+			if tool.Name == "find_engineering_rules" {
+				return tool.Handler
+			}
+		}
+		t.Fatal("tool missing")
+		return nil
+	}()
+
+	got, err := handler(context.Background(), json.RawMessage(`{"changed_paths":["a.go"]}`))
+	if err != nil {
+		t.Fatalf("find_engineering_rules: %v", err)
+	}
+	if !strings.Contains(got, "/somewhere/workspace") {
+		t.Errorf("output must name the workspace that answered:\n%s", got)
 	}
 }
 

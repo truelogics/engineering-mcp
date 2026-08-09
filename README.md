@@ -87,17 +87,24 @@ eng index .
 
 ```bash
 go build -o engineering-mcp ./cmd/engineering-mcp
-./engineering-mcp --workspace /path/to/workspace
+./engineering-mcp                              # resolves a workspace itself
+./engineering-mcp --workspace /path/to/workspace   # or name one
 ```
+
+With no `--workspace`, it resolves one at startup: the nearest workspace
+at or above the working directory, then `$ENGINEERING_WORKSPACE`. That is
+what lets a single registered server answer for every repository instead
+of the one it was configured for. It reports which workspace it chose,
+and why, on stderr.
 
 It speaks JSON-RPC 2.0 over stdin/stdout. Nothing else is ever written to
 stdout — diagnostics go to stderr, because a stray line on stdout
 corrupts the protocol.
 
-Starting against a directory with no `.eng/memory.db` is a hard failure,
-not an empty workspace. A server answering every question with "nothing
-found" is indistinguishable from one whose knowledge base is simply
-quiet (`engineering/rules/no-silent-fallback.md`).
+Finding no workspace at all is a hard failure, not an empty one. A server
+answering every question with "nothing found" is indistinguishable from
+one whose knowledge base is simply quiet
+(`engineering/rules/no-silent-fallback.md`).
 
 To install this into Claude Code — server registration and the
 `/review-branch` command — see

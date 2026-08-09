@@ -20,7 +20,12 @@ in opposite directions, from documentation rather than from behavior.
 Neither item below was worked around in this repository. Per the Kernel
 Rule, a consumer that discovers a kernel limitation records it and stops.
 
-## 1. `Search` passes its query to FTS5 unescaped, so a hyphen is a crash
+## 1. ~~`Search` passes its query to FTS5 unescaped, so a hyphen is a crash~~ — RESOLVED (Sprint 11)
+
+Fixed in `ai-memory` by `search.UserQuery`, applied at the two points raw
+human text enters (`pkg/memory.Search`, `eng search`). Kept below because
+the shape of the miss is the useful part: the kernel had solved this once
+on the retriever path and the neighbouring path never got the fix.
 
 Found in Sprint 11's first real review, twice, on ordinary input.
 

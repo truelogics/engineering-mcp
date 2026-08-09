@@ -30,12 +30,14 @@ type KnowledgeSource interface {
 	ContextFor(ctx context.Context, task string, opts memory.ContextOptions) (memory.ContextPackage, error)
 }
 
-// All returns every tool this server exposes, bound to src.
-func All(src KnowledgeSource) []mcp.Tool {
+// All returns every tool this server exposes, bound to src. workspace is
+// the directory the knowledge came from, named in rule answers so a
+// reader can tell which rulebook spoke.
+func All(src KnowledgeSource, workspace string) []mcp.Tool {
 	return []mcp.Tool{
 		searchMemory(src),
 		getContext(src),
-		findEngineeringRules(src),
+		findEngineeringRules(src, workspace),
 		verifyEvidence(src),
 	}
 }
@@ -182,7 +184,7 @@ func getContext(src KnowledgeSource) mcp.Tool {
 	}
 }
 
-func findEngineeringRules(src KnowledgeSource) mcp.Tool {
+func findEngineeringRules(src KnowledgeSource, workspace string) mcp.Tool {
 	return mcp.Tool{
 		Name: "find_engineering_rules",
 		Description: "Find the engineering rules that govern specific files. " +
@@ -222,8 +224,8 @@ func findEngineeringRules(src KnowledgeSource) mcp.Tool {
 				return fmt.Sprintf("No engineering rule governs %s.\n\n"+
 					"That is an answer, not an omission: no indexed rule declares it applies to these files.\n\n"+
 					"If that is surprising, check which workspace answered — `eng workspace list`. A workspace holding only "+
-					"your application has no rulebook to consult, and its answer looks exactly like this one.",
-					strings.Join(args.ChangedPaths, ", ")), nil
+					"your application has no rulebook to consult, and its answer looks exactly like this one.%s",
+					strings.Join(args.ChangedPaths, ", "), answeredBy(workspace)), nil
 			}
 
 			var b strings.Builder
@@ -231,6 +233,11 @@ func findEngineeringRules(src KnowledgeSource) mcp.Tool {
 			for _, r := range pkg.Rules {
 				fmt.Fprintf(&b, "- %s\n  %s\n\n", qualify(r.Repository, r.Path), clean(r.Snippet))
 			}
+			// Named on every answer, not only the empty one. A workspace
+			// holding a few stale or wrong rules returns them with total
+			// confidence, and that answer is indistinguishable from a
+			// correct one unless it says where it came from.
+			b.WriteString(strings.TrimPrefix(answeredBy(workspace), "\n"))
 			return b.String(), nil
 		},
 	}
@@ -259,6 +266,16 @@ func renderContext(task string, pkg memory.ContextPackage) string {
 	section("Architecture decision records", pkg.ADRs)
 	section("Related documents", pkg.RelevantFiles)
 	return b.String()
+}
+
+// answeredBy names the workspace a rule answer came from. Empty when the
+// caller did not supply one, so tests and library users are not forced
+// to invent a path.
+func answeredBy(workspace string) string {
+	if strings.TrimSpace(workspace) == "" {
+		return ""
+	}
+	return fmt.Sprintf("\n(Answered from the workspace at %s.)\n", workspace)
 }
 
 // qualify names a document as repository:path. A workspace holds several
