@@ -15,10 +15,7 @@ You need [Go 1.25 or newer](https://go.dev/dl/), git, and
 [Claude Code](https://claude.com/claude-code). If something below fails,
 [`INSTALL.md`](INSTALL.md) explains each step and what it produces.
 
-## 1. Put the repositories side by side
-
-They must be siblings, with these exact directory names: `engineering-mcp`
-builds against `../ai-memory`, so a different layout will not compile.
+## 1. Clone
 
 ```bash
 mkdir -p ~/engineering-os && cd ~/engineering-os

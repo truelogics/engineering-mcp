@@ -88,9 +88,9 @@ not overclaim.
 ## Requirements
 
 Go 1.25+, git, and an indexed AI Memory workspace. The server never
-indexes anything — it reads what `eng` has already built. `ai-memory` must
-be checked out as a sibling directory of this one; `go.mod` resolves the
-kernel by path.
+indexes anything — it reads what `eng` has already built. It depends on a
+released `ai-memory`, so this repository builds from a clone of its own;
+use a `go.work` when changing both at once (see `INSTALL.md`).
 
 ## Running it
 

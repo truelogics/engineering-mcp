@@ -49,7 +49,7 @@ speaks plain MCP and does not otherwise care.
 The first build downloads dependencies and can take a few minutes.
 Subsequent builds are seconds.
 
-## 1. Clone, as siblings
+## 1. Clone
 
 ```bash
 mkdir -p ~/engineering-os && cd ~/engineering-os
@@ -59,21 +59,23 @@ git clone git@github.com:truelogics/engineering-mcp.git
 git clone git@github.com:truelogics/engineering.git
 ```
 
-**The directory names matter.** `engineering-mcp/go.mod` carries
+The directory names no longer matter, and for a while they did.
+`engineering-mcp/go.mod` used to carry `replace … => ../ai-memory`, so
+the kernel was resolved by path: a clone under any other name, or
+anywhere not adjacent, failed with `replacement directory ../ai-memory
+does not exist` — accurate, and meaningless the first time you meet it.
+It now depends on a released version, so each repository builds alone.
 
-```
-replace github.com/truelogics/ai-memory => ../ai-memory
+If you are going to change both repositories at once, put a `go.work` at
+the directory containing them so your local kernel edits are visible to
+the server without a release:
+
+```bash
+cd ~/engineering-os && go work init ./ai-memory ./engineering-mcp
 ```
 
-so the kernel is resolved by path, not by version. Clone it under any
-other name, or anywhere that is not a sibling, and the build fails with:
-
-```
-github.com/truelogics/ai-memory@v0.1.0-alpha: replacement directory ../ai-memory does not exist
-```
-
-which is accurate and, the first time you meet it, unhelpful. There is
-nothing to configure — move the directory.
+Do not commit it to either repository — it belongs to your machine, and
+committing it would reimpose the layout requirement it exists to remove.
 
 The third repository is your **rulebook**: whichever repository holds your
 organization's engineering rules, ADRs and standards. For this
@@ -99,7 +101,7 @@ export PATH="$HOME/.local/bin:$PATH"
 Check both:
 
 ```bash
-eng version                 # eng version 0.1.0-dev
+eng version                 # eng version 0.2.0
 engineering-mcp --version   # engineering-mcp 0.1.0-alpha
 ```
 
@@ -260,8 +262,8 @@ developer's job.
 
 Run `eng doctor` first. Beyond that:
 
-**`replacement directory ../ai-memory does not exist`** — the two clones
-are not siblings, or `ai-memory` is under a different name. See step 1.
+**`replacement directory ../ai-memory does not exist`** — an old
+checkout with the removed `replace` directive. Pull, or see step 1.
 
 **`go.mod requires go >= 1.25.0`** — upgrade Go, or unset
 `GOTOOLCHAIN=local` and let Go fetch the toolchain.
