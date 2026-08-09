@@ -106,7 +106,7 @@ engineering-mcp --version   # engineering-mcp 0.1.0-alpha
 Installing somewhere on `PATH` is not cosmetic. Claude Code launches the
 server by absolute path, and if you later rebuild to a *different*
 location you end up with two binaries and a session that keeps running the
-older one. `engineering-mcp doctor` checks for exactly this and says so.
+older one. `eng doctor` checks for exactly this and says so.
 
 ## 3. Create a workspace
 
@@ -203,8 +203,13 @@ Installing it is necessary and not sufficient — see
 
 ```bash
 cd /path/to/your-application
-engineering-mcp doctor
+eng doctor
 ```
+
+`eng` is the entry point to Engineering OS (RFC-0008). `eng doctor`
+delegates to `engineering-mcp doctor`, which is where the MCP and Claude
+Code checks live — you do not need to know that, and this is the last
+time this document mentions it.
 
 Eight checks, ordered the way the system is layered, so the first failure
 is the cause and the ones after it are symptoms:
@@ -253,7 +258,7 @@ developer's job.
 
 ## When something is wrong
 
-Run `engineering-mcp doctor` first. Beyond that:
+Run `eng doctor` first. Beyond that:
 
 **`replacement directory ../ai-memory does not exist`** — the two clones
 are not siblings, or `ai-memory` is under a different name. See step 1.

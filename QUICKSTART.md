@@ -79,11 +79,15 @@ this command is what names these four. See
 ## 6. Check it
 
 ```bash
-engineering-mcp doctor
+eng doctor
 ```
 
 Eight checks, in the order the system is layered. Fix the first `✘`; the
 ones below it are usually its symptoms.
+
+`eng` is the entry point to all of Engineering OS (RFC-0008); `eng doctor`
+runs `engineering-mcp doctor` for you, so you never have to know which
+repository answers which question.
 
 ## 7. Use it
 
