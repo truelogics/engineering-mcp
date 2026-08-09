@@ -271,10 +271,15 @@ func checkIndex(ctx context.Context, env Env, ws workspace.Resolved) Check {
 	// inventory here would be a second implementation to drift.
 	out, err := env.Run(ctx, env.WorkingDir, eng, "workspace", "list", ws.Dir)
 	if err != nil {
+		// The path, not just "eng". A stale copy earlier on $PATH — an old
+		// `go install …@latest` shadowing a current build — fails here
+		// with a usage message that looks like a bug in this check rather
+		// than like two installations. Observed on the author's machine.
 		return Check{
 			Name:   name,
 			Status: StatusFail,
-			Detail: fmt.Sprintf("eng workspace list failed: %v\n%s", err, indent(out)),
+			Detail: fmt.Sprintf("%s workspace list failed: %v\n%s", eng, err, indent(out)),
+			Fix:    fmt.Sprintf("if that output looks like an older eng, %s is being shadowed on $PATH by an earlier copy.", eng),
 		}
 	}
 

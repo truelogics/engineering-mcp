@@ -74,7 +74,7 @@ connected, and explicitly allowed. Full account:
 ## Verification
 
 ```bash
-engineering-mcp doctor
+eng doctor
 ```
 
 Run it from inside the repository you want to review, not from the
@@ -210,7 +210,7 @@ order of likelihood:
 
 1. You asked in plain language and another review skill claimed it. Use
    `/review-branch`.
-2. The command is not installed at all. `engineering-mcp doctor` checks.
+2. The command is not installed at all. `eng doctor` checks.
 
 **"No MCP server found with name: engineering".** Not registered, or
 registered at project scope in a different project. `claude mcp get

@@ -59,7 +59,7 @@ step 3 is where you do something about it.
 
 ```bash
 cd /path/to/your-repository
-engineering-mcp doctor
+eng doctor
 ```
 
 The two checks that matter here:
@@ -183,8 +183,8 @@ eng search no-raw-sql
 
 ```bash
 cd /path/to/your-repository
-engineering-mcp doctor          # Engineering knowledge should now report rules
-claude
+eng doctor                      # Engineering knowledge should now report rules
+eng review                      # checks the setup, then hands over to Claude Code
 ```
 
 > Review my current branch.
