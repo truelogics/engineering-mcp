@@ -195,3 +195,43 @@ So a fix that makes Engineering MCP win everywhere would make that review
 worse. The target is not "called more often". It is "reached when it has
 something to say" — and if Stage 1 confirms skill capture, the honest
 conclusion may be that the two should compose rather than compete.
+
+## Stage 1 confirmed in ordinary use (Sprint 15)
+
+Not an experiment. Two reviews of Sprint 15's own branch, run because the
+sprint requires a review, on the same machine and the same commit, minutes
+apart. The only difference was how the request was phrased.
+
+| Asked as | Skill that ran | `ToolSearch` | MCP calls | Tool calls | Turns | Wall | Cost |
+|---|---|---|---|---|---|---|---|
+| "Review my current branch." | `review-pull-requests` | 0 | **0** | 37 | 39 | 461s | $2.92 |
+| `/review-branch` | `review-branch` | 1 | **9** | 59 | 61 | 628s | $4.29 |
+
+The mechanism is exactly the one Stage 1 identified. `review-pull-requests`
+is another project's skill; it does not mention Engineering MCP; nothing
+issued a `ToolSearch`; the four tools stayed deferred and uninvokable for
+the whole run. `review-branch` names them, so they loaded and were used —
+`find_engineering_rules`, `get_context`, and `verify_evidence` six times.
+
+Three things this adds to Stage 1.
+
+**Installing the command is necessary and not sufficient.** The command
+*was* installed. `doctor` confirms it. It still lost the match, because
+skill selection happens on the phrasing and the phrasing was generic. The
+documentation now says to invoke `/review-branch` by name rather than to
+describe the task, and that is a change Stage 1 alone would not have
+produced.
+
+**The difference is visible in the output, not just the telemetry.** The
+run that reached the platform cited `engineering:rules/go-wrap-errors.md`,
+`no-silent-fallback.md` and `pr-single-purpose.md` by name and verified
+each quote before using it. The run that did not was a competent review
+that could not have named a single organizational rule, because it never
+had access to one. Both found real defects. Only one could say which
+standard a defect violated.
+
+**The Sprint 15 Definition of Done is not met as literally worded.** It
+specifies `claude` → *"Review my current branch."* → Engineering MCP,
+with "no manual intervention". On a machine with one review skill that
+holds. On this one it does not, and the honest report is that the
+workflow requires typing a command rather than a sentence.

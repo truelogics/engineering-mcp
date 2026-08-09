@@ -44,5 +44,5 @@ produces citations for a review that was already written.
 
 Measured both ways in
 [`../../docs/reports/TOOL_DISCOVERY_EXPERIMENT.md`](../../docs/reports/TOOL_DISCOVERY_EXPERIMENT.md):
-three MCP calls with the command available, zero without it, out of forty
-tool calls either way.
+3 MCP calls out of 40 tool calls with the command available; 0 out of 42
+without it.

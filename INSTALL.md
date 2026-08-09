@@ -192,9 +192,12 @@ This step reads like a convenience and is not one. On a machine with
 several MCP servers installed, Claude Code defers tool schemas: the tool
 is absent from the model's prompt and cannot be called at all until
 something names it. In a controlled experiment, the same server with the
-same descriptions was called three times with this command installed and
-zero times without it, across 42 tool calls
+same descriptions was called 3 times out of 40 tool calls with this
+command available, and 0 times out of 42 without it
 ([`docs/reports/TOOL_DISCOVERY_EXPERIMENT.md`](docs/reports/TOOL_DISCOVERY_EXPERIMENT.md)).
+
+Installing it is necessary and not sufficient — see
+[`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md) on invoking it by name.
 
 ## 6. Verify
 
@@ -227,7 +230,12 @@ cd /path/to/your-application
 claude
 ```
 
-> Review my current branch.
+> /review-branch
+
+Invoke it by name. A plain-language *"Review my current branch."* can be
+claimed by any other review skill installed on the machine, and if it is,
+Engineering OS is never reached — see
+[`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md).
 
 ## Keeping the index current
 

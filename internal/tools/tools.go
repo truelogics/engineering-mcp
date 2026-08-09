@@ -36,7 +36,7 @@ type KnowledgeSource interface {
 func All(src KnowledgeSource, workspace string) []mcp.Tool {
 	return []mcp.Tool{
 		searchMemory(src),
-		getContext(src),
+		getContext(src, workspace),
 		findEngineeringRules(src, workspace),
 		verifyEvidence(src),
 	}
@@ -153,7 +153,7 @@ func searchMemory(src KnowledgeSource) mcp.Tool {
 	}
 }
 
-func getContext(src KnowledgeSource) mcp.Tool {
+func getContext(src KnowledgeSource, workspace string) mcp.Tool {
 	return mcp.Tool{
 		Name: "get_context",
 		Description: "Gather all engineering context relevant to a task — related documents, ADRs, and the engineering rules that govern it. " +
@@ -179,7 +179,7 @@ func getContext(src KnowledgeSource) mcp.Tool {
 			if err != nil {
 				return "", err
 			}
-			return renderContext(args.Task, pkg), nil
+			return renderContext(args.Task, pkg, workspace), nil
 		},
 	}
 }
@@ -247,7 +247,7 @@ func findEngineeringRules(src KnowledgeSource, workspace string) mcp.Tool {
 // empty are named rather than omitted, because "no rule governs this"
 // and "I didn't look" are different answers and a model cannot tell them
 // apart from silence.
-func renderContext(task string, pkg memory.ContextPackage) string {
+func renderContext(task string, pkg memory.ContextPackage, workspace string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Engineering context for: %s\n", task)
 
@@ -265,6 +265,11 @@ func renderContext(task string, pkg memory.ContextPackage) string {
 	section("Engineering rules governing these files", pkg.Rules)
 	section("Architecture decision records", pkg.ADRs)
 	section("Related documents", pkg.RelevantFiles)
+	// Named here for the same reason as on find_engineering_rules, and
+	// missed here at first: this tool returns rules too, its description
+	// recommends it as the broadest capability, and a reviewer who uses
+	// only this one was getting rules from an unnamed source.
+	b.WriteString(answeredBy(workspace))
 	return b.String()
 }
 

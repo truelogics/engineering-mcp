@@ -102,10 +102,26 @@ cd your-repository
 claude
 ```
 
-> Review my current branch.
+> /review-branch
 
-Claude Code derives the repository, branch, base and changed files from
-git, then:
+**Invoke it by name.** The natural-language form is not equivalent. Two
+runs on this repository, same commit, minutes apart, same machine:
+
+| Asked as | Skill that ran | `ToolSearch` | Engineering MCP calls | Total tool calls |
+|---|---|---|---|---|
+| `/review-branch` | `review-branch` | 1 | **9** | 59 |
+| "Review my current branch." | `review-pull-requests` | 0 | **0** | 37 |
+
+Both produced a competent review. The second never called Engineering
+OS — a different project's review skill matched the sentence first, and
+because tool schemas are deferred, losing that match is not a preference
+but an exclusion: nothing named the tools, so nothing could call them.
+
+The sprint that specified this workflow assumed the plain sentence would
+work. On a machine with one review skill it does. This one had several.
+
+Once the command is running, Claude Code derives the repository, branch,
+base and changed files from git, then:
 
 **1. Finds the rules that govern those files.**
 
@@ -189,8 +205,12 @@ repositories and `README.md` is ambiguous across them.
 ## Common problems
 
 **Claude Code never calls the tools.** By far the most common, and it
-looks exactly like the server being broken. Check `/review-branch` is
-installed. See the table above.
+looks exactly like the server being broken. Two distinct causes, in
+order of likelihood:
+
+1. You asked in plain language and another review skill claimed it. Use
+   `/review-branch`.
+2. The command is not installed at all. `engineering-mcp doctor` checks.
 
 **"No MCP server found with name: engineering".** Not registered, or
 registered at project scope in a different project. `claude mcp get

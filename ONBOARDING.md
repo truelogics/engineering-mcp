@@ -34,18 +34,26 @@ return as one keyword hit among 662 siblings.
 
 ## 1. Attach it
 
+Attach it to the workspace that already holds your **rulebook**. A
+workspace containing only your application has nothing to consult, and
+answers every question about rules with a confident "none".
+
 ```bash
+cd /path/to/your/workspace-root
 eng workspace attach /path/to/your-repository
 eng workspace list
 ```
 
+**Run this from the workspace root.** `eng workspace attach` has no way to
+be told which workspace to attach to — it uses the one in the current
+directory, and refuses to create one. Run from your repository instead, it
+fails with "run `eng init` first", and following *that* advice creates a
+second workspace nested inside your repository, which then shadows the
+real one for everything started there.
+
 Attach indexes as it goes. If `list` shows a document count of zero, the
 repository has no markdown at its top levels — which is a real answer, and
 step 3 is where you do something about it.
-
-Attach it to the workspace that already holds your **rulebook**. A
-workspace containing only your application has nothing to consult, and
-answers every question about rules with a confident "none".
 
 ## 2. Check what the index thinks it has
 
@@ -164,9 +172,10 @@ Re-index after adding one:
 eng index /path/to/your/workspace-root
 ```
 
-Then confirm it can be found, using the files it claims to govern:
+Then confirm it can be found:
 
 ```bash
+cd /path/to/your/workspace-root      # eng search reads the workspace here
 eng search no-raw-sql
 ```
 

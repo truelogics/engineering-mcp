@@ -34,7 +34,9 @@ func main() {
 		subcommand, args = args[0], args[1:]
 	}
 
-	fs := flag.NewFlagSet(serverName, flag.ExitOnError)
+	// ContinueOnError, not ExitOnError: with ExitOnError, Parse never
+	// returns and the error branch below is dead code that looks handled.
+	fs := flag.NewFlagSet(serverName, flag.ContinueOnError)
 	workspaceFlag := fs.String("workspace", "",
 		"path to the indexed AI Memory workspace (default: the workspace containing the working directory, then $"+workspace.EnvVar+")")
 	showVersion := fs.Bool("version", false, "print version and exit")
@@ -52,15 +54,18 @@ func main() {
 		os.Exit(2)
 	}
 
-	if *showVersion {
-		fmt.Println(serverName + " " + version)
-		return
-	}
-
+	// The subcommand outranks --version. The other order made
+	// `engineering-mcp doctor --version` print a version string and never
+	// run the diagnostic it was asked for.
 	if subcommand == "doctor" {
 		if !runDoctor(*workspaceFlag) {
 			os.Exit(1)
 		}
+		return
+	}
+
+	if *showVersion {
+		fmt.Println(serverName + " " + version)
 		return
 	}
 
@@ -97,8 +102,16 @@ func runDoctor(workspaceFlag string) bool {
 	}
 	self, err := os.Executable()
 	if err != nil {
-		// Not fatal: only the checks that compare installed binaries lose
-		// precision, and reporting the rest beats reporting nothing.
+		// Not fatal — the rest of the checks are still worth running —
+		// but said out loud. Substituting the bare name silently made
+		// three checks compare a real path against it and report "two
+		// builds are installed" and "Claude Code launches X, not
+		// engineering-mcp", which is the shape
+		// engineering:rules/no-silent-fallback.md exists to prevent: a
+		// substitution whose output is indistinguishable from the real
+		// thing.
+		fmt.Fprintf(os.Stderr, "%s: could not determine this binary's own path (%v).\n"+
+			"Checks that compare installed binaries are unreliable in this run.\n\n", serverName, err)
 		self = serverName
 	}
 

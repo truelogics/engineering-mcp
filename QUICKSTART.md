@@ -92,11 +92,22 @@ cd /path/to/your-application
 claude
 ```
 
-> Review my current branch.
+> /review-branch
 
 Claude Code works out the branch, base and changed files from git, asks
 Engineering OS which rules govern those files and what has been decided
 around them, and then reviews.
+
+**Type the command, not a sentence.** Asking *"Review my current branch."*
+in plain language works only if nothing else claims it. Measured on this
+repository, on the same commit, minutes apart:
+
+| Asked as | Skill that ran | Engineering MCP calls |
+|---|---|---|
+| `/review-branch` | `review-branch` | **9** of 59 tool calls |
+| "Review my current branch." | `review-pull-requests` | **0** of 37 |
+
+Both produced a review. Only one consulted the organization's knowledge.
 
 ## Next
 

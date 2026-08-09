@@ -216,3 +216,106 @@ The strongest evidence that the documentation is now true is not this
 report. It is that the sequence in `QUICKSTART.md` was executed verbatim
 in an empty directory, and produced a working install without a single
 step that is not written down.
+
+---
+
+## What the review of this work found
+
+Sprint 15's own branch was reviewed with Engineering OS before merging,
+per the standing instruction not to skip review on your own project. It
+found more than the clean-machine run did, and one finding was a false
+claim in this repository's new code.
+
+### The diagnostic reported failure on a correctly installed machine
+
+`INSTALL.md` sets `ENGINEERING_WORKSPACE` inside `claude mcp add -e ...`,
+which places it in the environment of the server Claude Code spawns and
+nowhere else. `doctor` resolved the workspace from *its own* environment.
+So a developer who followed the instructions exactly, standing in an
+application that is not itself inside a workspace, got:
+
+```
+  ✘  Workspace              no indexed workspace found …
+  ✘  Workspace index        skipped: no workspace resolved
+  ✘  Engineering knowledge  skipped: no workspace resolved
+  ✔  Claude Code registration   Status: ✔ Connected
+  ✘  MCP handshake          the server closed the connection …
+```
+
+Four failures one line below a green connection, and the advice attached
+to the first — `eng workspace create .` in the application — creates
+exactly the nested `.eng/` that `INSTALL.md` warns shadows the real
+workspace. The diagnostic manufactured the misconfiguration it exists to
+catch. Reproduced, then fixed: `doctor` now reads the registered
+environment out of `claude mcp get` and diagnoses the resolution the
+*registered server* will perform.
+
+### It advised something that does nothing
+
+The first fix carried the line *"export ENGINEERING_WORKSPACE=…, to use
+eng from this directory too"*. `eng` does not read that variable. It
+contains no `os.Getenv` call at all; every workspace subcommand takes a
+positional path defaulting to the current directory. Verified by grep and
+by running it.
+
+The review caught this by checking the claim against the other
+repository rather than against the sentence. A developer who followed the
+advice would have seen no change and concluded the install was broken —
+worse than no advice.
+
+### Every `eng workspace attach` fix it printed would have failed
+
+`eng workspace attach` has no way to be told which workspace to attach
+to: it operates on the current directory's and refuses to create one. The
+fixes `doctor` printed were bare `eng workspace attach <repo>`, and they
+fire precisely when the working directory is *not* the workspace root.
+Run as printed, they fail with "run `eng init` first" — whose advice is,
+again, the nested `.eng/`. Now prefixed with `cd <workspace>`.
+`ONBOARDING.md` had the same defect in its first instruction.
+
+### Rules the review cited, correctly
+
+- `go-wrap-errors` (severity error) — `internal/doctor/system.go` returned
+  bare errors and used `fmt.Errorf` without a package prefix, while
+  `internal/workspace/resolve.go`, added on the same branch, prefixes
+  every error. Two new packages, one branch, opposite conventions. Fixed.
+- `no-silent-fallback` — `runDoctor` substituted the bare string
+  `engineering-mcp` when `os.Executable` failed, which then made three
+  checks compare a real path against a name and report "two builds are
+  installed". A substitution indistinguishable from the real thing. Now
+  announced on stderr.
+- `pr-single-purpose` (severity warn) — this branch is one diagnostic
+  subcommand, a tool-surface change, a taxonomy file and ~1,900 lines of
+  documentation. The sprint framing is deliberate, so it stands, but the
+  note is fair and recorded rather than argued away.
+
+### And one thing the review found that the sprint's own design missed
+
+`find_engineering_rules` names the workspace that answered, with the
+argument that a workspace holding stale rules answers with exactly the
+confidence of a correct one. `get_context` returns rules too — under its
+own heading, and its description recommends it as the broadest
+capability — and named nothing. The argument was made once and applied
+once. Now applied to both, with a test that covers every tool returning
+rules rather than one tool by name.
+
+## Milestone 6: the workflow does not hold as specified
+
+The Definition of Done specifies `claude` → *"Review my current
+branch."* → Engineering MCP → review, with "no manual intervention". Run
+both ways on the same commit, minutes apart:
+
+| Asked as | Skill that ran | MCP calls | Tool calls |
+|---|---|---|---|
+| "Review my current branch." | `review-pull-requests` | **0** | 37 |
+| `/review-branch` | `review-branch` | **9** | 59 |
+
+The plain sentence was claimed by another project's review skill, which
+never names Engineering MCP, so the deferred tools were never loaded. The
+command was installed the whole time; installing it is necessary and not
+sufficient.
+
+The documentation now tells the reader to type `/review-branch`. That is
+one word of manual intervention more than the sprint specified, and it is
+the truth. Full measurement in
+[`TOOL_DISCOVERY_EXPERIMENT.md`](TOOL_DISCOVERY_EXPERIMENT.md).

@@ -277,3 +277,41 @@ func TestVerifyEvidenceRequiresAllThreeArguments(t *testing.T) {
 		}
 	}
 }
+
+// TestEveryToolThatReturnsRulesNamesItsSource.
+//
+// The argument for attribution was made for find_engineering_rules and
+// then not applied to get_context, which returns rules under its own
+// heading and whose description recommends it as the broadest
+// capability. A reviewer using only that tool got rules from an unnamed
+// workspace — and a workspace holding stale or wrong rules returns them
+// with total confidence, indistinguishable from a correct one unless it
+// says where it came from.
+func TestEveryToolThatReturnsRulesNamesItsSource(t *testing.T) {
+	const ws = "/somewhere/workspace-root"
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/logging.md", Repository: "engineering", Snippet: "Every error is wrapped"},
+	}}}
+
+	calls := map[string]string{
+		"get_context":            `{"task":"add caching","changed_paths":["internal/a.go"]}`,
+		"find_engineering_rules": `{"changed_paths":["internal/a.go"]}`,
+	}
+	for name, args := range calls {
+		t.Run(name, func(t *testing.T) {
+			var handler func(context.Context, json.RawMessage) (string, error)
+			for _, tool := range All(src, ws) {
+				if tool.Name == name {
+					handler = tool.Handler
+				}
+			}
+			got, err := handler(context.Background(), json.RawMessage(args))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got, ws) {
+				t.Errorf("%s returned rules without naming the workspace they came from:\n%s", name, got)
+			}
+		})
+	}
+}

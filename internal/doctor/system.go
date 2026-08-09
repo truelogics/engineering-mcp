@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-mcp/internal/workspace"
 )
 
 // commandTimeout bounds every external command. A doctor that hangs is
@@ -59,26 +60,33 @@ func openKnowledge(dir string) (Knowledge, error) {
 // Nothing here shortcuts to the in-process tool registry. The failure
 // this check exists to catch is a stray line on stdout, which leaves the
 // registry perfectly correct and the protocol unparseable.
-func handshake(ctx context.Context, self, dir string) ([]string, error) {
+func handshake(ctx context.Context, self, dir, workspaceEnv string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, self)
 	cmd.Dir = dir
+	// The workspace the earlier checks resolved, which may have come from
+	// the Claude Code registration rather than from this shell. Without
+	// it, the handshake fails on a correctly installed machine whose
+	// developer never exported the variable — see checkWorkspace.
+	if workspaceEnv != "" {
+		cmd.Env = append(os.Environ(), workspace.EnvVar+"="+workspaceEnv)
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("doctor: stdin pipe for %s: %w", self, err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("doctor: stdout pipe for %s: %w", self, err)
 	}
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("could not start %s: %w", self, err)
+		return nil, fmt.Errorf("doctor: could not start %s: %w", self, err)
 	}
 	// The server exits when stdin closes, which is how this returns
 	// rather than waiting out the timeout.
@@ -104,7 +112,15 @@ func handshake(ctx context.Context, self, dir string) ([]string, error) {
 	return names, nil
 }
 
-// readToolList reads responses until the one carrying tools/list.
+// readToolList reads responses until the one answering request id 2.
+//
+// Matched by id rather than by "the response that has tools in it". A
+// server that advertises none is a real failure with its own message, and
+// skipping empty results made that case fall through to EOF and report
+// that the transport died — sending a developer whose registry failed to
+// populate to debug the wrong layer.
+const toolListID = "2"
+
 func readToolList(r io.Reader) ([]string, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -134,7 +150,7 @@ func readToolList(r io.Reader) ([]string, error) {
 		if resp.Error != nil {
 			return nil, fmt.Errorf("the server returned an error: %s", resp.Error.Message)
 		}
-		if len(resp.Result.Tools) == 0 {
+		if strings.TrimSpace(string(resp.ID)) != toolListID {
 			continue // the initialize response
 		}
 		names := make([]string, 0, len(resp.Result.Tools))
@@ -144,17 +160,21 @@ func readToolList(r io.Reader) ([]string, error) {
 		return names, nil
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading the server's output: %w", err)
 	}
 	return nil, fmt.Errorf("the server closed the connection without answering tools/list")
 }
 
+// withStderr is the package boundary for handshake's failures, so the
+// `doctor:` prefix goes on here rather than on every message readToolList
+// produces — engineering:rules/go-wrap-errors.md asks for one prefix
+// naming the package, not one per layer.
 func withStderr(what string, err error, stderr string) error {
 	stderr = strings.TrimSpace(stderr)
 	if stderr == "" {
-		return fmt.Errorf("%s: %w", what, err)
+		return fmt.Errorf("doctor: %s: %w", what, err)
 	}
-	return fmt.Errorf("%s: %w\n%s", what, err, indent(stderr))
+	return fmt.Errorf("doctor: %s: %w\n%s", what, err, indent(stderr))
 }
 
 func truncate(s string, n int) string {

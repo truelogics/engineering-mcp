@@ -73,9 +73,10 @@ type Env struct {
 	// output is wanted even when err is non-nil: a CLI's failure message
 	// is usually the diagnosis.
 	Run func(ctx context.Context, dir, name string, args ...string) (string, error)
-	// Handshake speaks MCP to the binary at self, started in dir, and
+	// Handshake speaks MCP to the binary at self, started in dir with
+	// ENGINEERING_WORKSPACE set to workspaceEnv (empty to inherit), and
 	// returns the tool names it advertises.
-	Handshake func(ctx context.Context, self, dir string) ([]string, error)
+	Handshake func(ctx context.Context, self, dir, workspaceEnv string) ([]string, error)
 	// OpenKnowledge opens an indexed workspace for the retrieval probe.
 	OpenKnowledge func(dir string) (Knowledge, error)
 	// Exists reports whether a path is present.
@@ -89,20 +90,57 @@ func Run(ctx context.Context, env Env) []Check {
 	var checks []Check
 	add := func(c Check) { checks = append(checks, c) }
 
+	// Read first, report later. What Claude Code registered decides which
+	// workspace the server will actually serve, so the checks below it
+	// have to know before they run — even though the registration is
+	// reported further down, where it belongs in the layering.
+	reg := readRegistration(ctx, env)
+
 	add(checkServerBinary(env))
 	add(checkEngCLI(ctx, env))
 
-	ws, wsCheck := checkWorkspace(env)
+	ws, wsCheck := checkWorkspace(env, reg)
 	add(wsCheck)
 
 	add(checkIndex(ctx, env, ws))
 	add(checkKnowledge(ctx, env, ws))
-	add(checkClaudeCode(ctx, env))
-	add(checkHandshake(ctx, env))
+	add(checkClaudeCode(env, reg))
+	add(checkHandshake(ctx, env, ws))
 	add(checkReviewCommand(env))
 
 	return checks
 }
+
+// registration is what `claude mcp get engineering` reports: the binary
+// Claude Code launches and the environment it launches it with.
+type registration struct {
+	// Found is false when the claude CLI is absent, which is a different
+	// answer from a server that is not registered.
+	Found     bool
+	Err       error
+	Raw       string
+	Command   string
+	Workspace string
+}
+
+func readRegistration(ctx context.Context, env Env) registration {
+	claude, err := env.LookPath("claude")
+	if err != nil {
+		return registration{}
+	}
+	out, err := env.Run(ctx, env.WorkingDir, claude, "mcp", "get", "engineering")
+	reg := registration{Found: true, Err: err, Raw: out}
+	if err != nil {
+		return reg
+	}
+	reg.Command = fieldAfter(out, "Command:")
+	reg.Workspace = fieldAfter(out, EnvAssignmentPrefix)
+	return reg
+}
+
+// EnvAssignmentPrefix is how `claude mcp get` prints the workspace
+// variable inside its Environment block.
+const EnvAssignmentPrefix = workspace.EnvVar + "="
 
 // checkServerBinary answers "is Engineering MCP installed?" — and the
 // sharper question behind it, which is whether the binary Claude Code
@@ -160,24 +198,57 @@ func checkEngCLI(ctx context.Context, env Env) Check {
 	return Check{Name: "AI Memory (eng)", Status: StatusOK, Detail: fmt.Sprintf("%s (%s)", firstLine(out), path)}
 }
 
+// sourceRegistration is not one of workspace.Resolve's own sources. It is
+// how doctor records that the workspace came from the Claude Code
+// registration rather than from doctor's own environment.
+const sourceRegistration workspace.Source = "$" + workspace.EnvVar + " in the Claude Code registration"
+
 // checkWorkspace answers "is the workspace valid?" by running the server's
 // own resolver against the current directory — the same call, in the same
 // order, that the server makes at startup. Its error text is already
 // written for a developer, so it is passed through rather than restated.
-func checkWorkspace(env Env) (workspace.Resolved, Check) {
+//
+// With one addition the server does not need. The documented install sets
+// ENGINEERING_WORKSPACE inside `claude mcp add -e ...`, which puts it in
+// the environment of the server Claude Code spawns and nowhere else — so a
+// developer who followed the instructions exactly has it unset in their
+// own shell. Resolving from doctor's environment alone reported four
+// failures on a correctly installed machine, one line below "Claude Code
+// registration: ✔ Connected", and its advice to run `eng workspace create
+// .` inside the application would have created precisely the nested .eng/
+// the install guide warns about. The diagnostic manufactured the
+// misconfiguration it exists to catch. Found reviewing this file.
+func checkWorkspace(env Env, reg registration) (workspace.Resolved, Check) {
+	const name = "Workspace"
+
 	ws, err := workspace.Resolve(env.WorkspaceFlag, env.WorkingDir)
-	if err != nil {
+	if err == nil {
+		return ws, Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("%s (%s)", ws.Dir, ws.Source)}
+	}
+
+	if reg.Workspace != "" && workspace.IsIndexed(reg.Workspace) {
+		ws = workspace.Resolved{Dir: reg.Workspace, Source: sourceRegistration}
 		return ws, Check{
-			Name:   "Workspace",
-			Status: StatusFail,
-			Detail: err.Error(),
+			Name:   name,
+			Status: StatusOK,
+			Detail: fmt.Sprintf("%s (%s)\nThis directory is not itself inside a workspace, so that is what Claude Code serves here.", ws.Dir, ws.Source),
+			// eng does not read ENGINEERING_WORKSPACE — it has no
+			// os.Getenv call at all, and every workspace subcommand takes
+			// a positional path defaulting to the current directory. An
+			// earlier version of this advised exporting the variable,
+			// which changes nothing, and a developer who followed it
+			// would have concluded the install was broken.
+			Fix: fmt.Sprintf("eng resolves the workspace from the directory it runs in, so run it there:\n    cd %s", ws.Dir),
 		}
 	}
-	return ws, Check{
-		Name:   "Workspace",
-		Status: StatusOK,
-		Detail: fmt.Sprintf("%s (%s)", ws.Dir, ws.Source),
+
+	detail := err.Error()
+	if reg.Workspace != "" {
+		// Registered but unusable is a sharper failure than unregistered,
+		// and its fix is different.
+		detail = fmt.Sprintf("the Claude Code registration points at %s, which holds no index.\n\n%s", reg.Workspace, detail)
 	}
+	return workspace.Resolved{}, Check{Name: name, Status: StatusFail, Detail: detail}
 }
 
 // checkIndex answers "is the repository indexed?" — meaning this
@@ -213,7 +284,13 @@ func checkIndex(ctx context.Context, env Env, ws workspace.Resolved) Check {
 			Name:   name,
 			Status: StatusWarn,
 			Detail: fmt.Sprintf("%s is not attached to this workspace — reviews here will retrieve other repositories' documents\n%s", repo, trimBlank(out)),
-			Fix:    fmt.Sprintf("eng workspace attach %s", repo),
+			// `cd` first, and not as politeness. `eng workspace attach`
+			// has no way to be told which workspace to attach to: it
+			// operates on the current directory's, and refuses to create
+			// one. Run bare from the repository this warning is about, it
+			// fails with "run `eng init` first" — whose advice creates the
+			// nested .eng/ the install guide warns against.
+			Fix: fmt.Sprintf("cd %s && eng workspace attach %s", ws.Dir, repo),
 		}
 	}
 	return Check{Name: name, Status: StatusOK, Detail: trimBlank(out)}
@@ -263,7 +340,7 @@ func checkKnowledge(ctx context.Context, env Env, ws workspace.Resolved) Check {
 			Status: StatusWarn,
 			Detail: sampled + " — no rule governs this repository's files",
 			Fix: "if that is a surprise, this workspace probably holds no rulebook:\n" +
-				"    eng workspace attach /path/to/your/engineering-rules-repo",
+				fmt.Sprintf("    cd %s && eng workspace attach /path/to/your/engineering-rules-repo", ws.Dir),
 		}
 	}
 	return Check{Name: name, Status: StatusOK, Detail: sampled}
@@ -272,10 +349,9 @@ func checkKnowledge(ctx context.Context, env Env, ws workspace.Resolved) Check {
 // checkClaudeCode answers "is Claude Code connected?" using Claude Code's
 // own report, including the trap where a server is registered and healthy
 // but points at a different binary than the one being developed.
-func checkClaudeCode(ctx context.Context, env Env) Check {
+func checkClaudeCode(env Env, reg registration) Check {
 	const name = "Claude Code registration"
-	claude, err := env.LookPath("claude")
-	if err != nil {
+	if !reg.Found {
 		return Check{
 			Name:   name,
 			Status: StatusWarn,
@@ -283,35 +359,40 @@ func checkClaudeCode(ctx context.Context, env Env) Check {
 		}
 	}
 
-	out, err := env.Run(ctx, env.WorkingDir, claude, "mcp", "get", "engineering")
-	if err != nil {
+	if reg.Err != nil {
+		// The CLI's own message, not a guess at what it meant. It fails
+		// for reasons other than an unregistered server, and reporting
+		// "not registered" for all of them sends the reader to fix
+		// something that is not broken.
 		return Check{
 			Name:   name,
 			Status: StatusFail,
-			Detail: "no MCP server named 'engineering' is registered",
+			Detail: trimBlank(reg.Raw),
 			Fix: "claude mcp add engineering --scope user \\\n" +
-				"      -e ENGINEERING_WORKSPACE=/path/to/your/workspace-root \\\n" +
+				"      -e " + EnvAssignmentPrefix + "/path/to/your/workspace-root \\\n" +
 				"      -- " + env.Self,
 		}
 	}
 
 	switch {
-	case strings.Contains(out, "Failed to connect"), strings.Contains(out, "✘"):
+	case strings.Contains(reg.Raw, "Failed to connect"), strings.Contains(reg.Raw, "✘"):
 		return Check{
 			Name:   name,
 			Status: StatusFail,
-			Detail: trimBlank(out),
+			Detail: trimBlank(reg.Raw),
 			Fix:    "the command above is registered but does not start. Run it directly to see why.",
 		}
-	case registeredCommand(out) != "" && !samePath(registeredCommand(out), env.Self):
+	case reg.Command != "" && !samePath(reg.Command, env.Self):
 		return Check{
 			Name:   name,
 			Status: StatusWarn,
-			Detail: fmt.Sprintf("Claude Code launches %s, not %s", registeredCommand(out), env.Self),
+			Detail: fmt.Sprintf("Claude Code launches %s, not %s", reg.Command, env.Self),
 			Fix:    "re-register, or rebuild over the registered path — otherwise your changes never reach Claude Code.",
 		}
 	}
-	return Check{Name: name, Status: StatusOK, Detail: trimBlank(out)}
+	// The trailing "To remove this server, run: ..." hint is help for a
+	// different question than the one being asked.
+	return Check{Name: name, Status: StatusOK, Detail: firstParagraph(reg.Raw)}
 }
 
 // checkHandshake answers "is the MCP server reachable?" the only way that
@@ -319,9 +400,20 @@ func checkClaudeCode(ctx context.Context, env Env) Check {
 // directory Claude Code would, and reads the tool list off the wire. This
 // is the check that catches anything written to stdout, which corrupts
 // the protocol without corrupting anything visible.
-func checkHandshake(ctx context.Context, env Env) Check {
+func checkHandshake(ctx context.Context, env Env, ws workspace.Resolved) Check {
 	const name = "MCP handshake"
-	toolNames, err := env.Handshake(ctx, env.Self, env.WorkingDir)
+	// Skipped rather than run, for the same reason as the two checks
+	// above: with no workspace the server exits on startup, and this
+	// would report the workspace error a second time as if it were an
+	// independent fourth failure — fifteen duplicated lines under a
+	// heading that says the transport is broken.
+	if ws.Dir == "" {
+		return Check{Name: name, Status: StatusFail, Detail: "skipped: no workspace resolved"}
+	}
+	// The resolved workspace is passed through, so this starts the server
+	// the way Claude Code does rather than the way doctor's shell happens
+	// to be configured.
+	toolNames, err := env.Handshake(ctx, env.Self, env.WorkingDir, ws.Dir)
 	if err != nil {
 		return Check{Name: name, Status: StatusFail, Detail: err.Error()}
 	}
@@ -417,50 +509,84 @@ func repositoryRoot(ctx context.Context, env Env) string {
 }
 
 // sampleFiles takes a handful of the repository's tracked files to probe
-// retrieval with. Sorted-first rather than random, so two runs of doctor
+// retrieval with. Deterministic rather than random, so two runs of doctor
 // on an unchanged repository report the same thing.
+//
+// Spread across the listing rather than taken from the front. git's sort
+// order puts root-level markdown first, so the first ten files of this
+// repository are its documentation and none of its Go — and a rulebook
+// scoped to `**/*.go` would have been probed with nothing it governs, and
+// reported as having nothing to say.
 func sampleFiles(ctx context.Context, env Env) []string {
 	git, err := env.LookPath("git")
 	if err != nil {
 		return nil
 	}
-	out, err := env.Run(ctx, env.WorkingDir, git, "ls-files")
+	// --full-name because rules are matched against repository-relative
+	// paths. Without it, running doctor from a subdirectory yields paths
+	// relative to that subdirectory, every applies_to glob misses, and
+	// the check reports "no rule governs this repository" for a
+	// repository that is governed perfectly well.
+	out, err := env.Run(ctx, env.WorkingDir, git, "ls-files", "--full-name")
 	if err != nil {
 		return nil
 	}
-	const sample = 10
-	var paths []string
+	var tracked []string
 	for _, line := range strings.Split(out, "\n") {
-		p := strings.TrimSpace(line)
-		if p == "" {
-			continue
+		if p := strings.TrimSpace(line); p != "" {
+			tracked = append(tracked, p)
 		}
-		paths = append(paths, p)
-		if len(paths) == sample {
-			break
-		}
+	}
+
+	const sample = 10
+	if len(tracked) <= sample {
+		return tracked
+	}
+	stride := len(tracked) / sample
+	paths := make([]string, 0, sample)
+	for i := 0; i < len(tracked) && len(paths) < sample; i += stride {
+		paths = append(paths, tracked[i])
 	}
 	return paths
 }
 
-// registeredCommand pulls the launched binary out of `claude mcp get`
-// output. Empty when the line is absent, which callers treat as "cannot
-// tell" rather than "mismatch".
-func registeredCommand(out string) string {
+// fieldAfter returns the remainder of the first line carrying prefix.
+// Empty when no line does, which callers treat as "cannot tell" rather
+// than as a mismatch.
+func fieldAfter(out, prefix string) string {
 	for _, line := range strings.Split(out, "\n") {
-		if rest, found := strings.CutPrefix(strings.TrimSpace(line), "Command:"); found {
+		if rest, found := strings.CutPrefix(strings.TrimSpace(line), prefix); found {
 			return strings.TrimSpace(rest)
 		}
 	}
 	return ""
 }
 
-// mentionsPath reports whether out names dir. Whole-field comparison, not
-// substring: /work/api is not indexed merely because /work/api-gateway is.
+// mentionsPath reports whether out names dir.
+//
+// Line-wise and suffix-anchored rather than field-wise. Splitting on
+// whitespace shreds `/Users/x/My Projects/api` into two fragments, and
+// doctor then reports a perfectly well attached repository as missing —
+// on macOS, where directory names with spaces are ordinary. The suffix
+// still has to fall on a field boundary, so /work/api does not match a
+// line ending in /work/my-api.
 func mentionsPath(out, dir string) bool {
-	for _, field := range strings.Fields(out) {
-		if samePath(field, dir) {
-			return true
+	targets := []string{dir}
+	if real, err := filepath.EvalSymlinks(dir); err == nil && real != dir {
+		targets = append(targets, real)
+	}
+
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimRight(line, " \t\r")
+		for _, t := range targets {
+			if line == t {
+				return true
+			}
+			if strings.HasSuffix(line, t) {
+				if c := line[len(line)-len(t)-1]; c == ' ' || c == '\t' {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -482,6 +608,17 @@ func samePath(a, b string) bool {
 		return false
 	}
 	return ra == rb
+}
+
+// firstParagraph keeps everything up to the first blank line, which is
+// how the CLIs doctor shells out to separate their answer from the advice
+// they offer afterwards.
+func firstParagraph(s string) string {
+	s = trimBlank(s)
+	if i := strings.Index(s, "\n\n"); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 func firstLine(s string) string {
