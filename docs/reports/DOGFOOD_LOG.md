@@ -311,6 +311,48 @@ architecture.
 Both facts point the same way. On this project Engineering OS was not
 merely unused; it had no answer worth interrupting for.
 
+**The run completed: 41 turns, 465s, $3.13, four Skills, 25 Bash, 4 Grep,
+3 Read, zero Engineering OS calls.** It produced a good review — two
+blocking correctness findings with exact line references, of the kind
+only domain knowledge yields.
+
+### And the decisive evidence was a document we had indexed
+
+The first blocking finding does not rest on the code. It rests on a
+planning document:
+
+> both read paths changed to `Order(ent.Asc(blockdata.FieldVOrderV2), …)`.
+> But the block_data backfill was deliberately dropped —
+> `plans/to-do/block-fractional-indexing-vorder-v2.md:43-53` says the
+> worker code was removed and the read sort is "retained here for
+> reference only".
+
+That is exactly the class of knowledge this platform exists to serve: a
+written decision the diff contradicts, which no amount of reading the
+code would reveal. It is in the workspace. It was indexed successfully.
+
+It reached it with two shell commands:
+
+```
+grep -n -i "block_data\|blockdata" plans/to-do/block-fractional-indexing-vorder-v2.md
+sed -n '41,56p;176,196p'          plans/to-do/block-fractional-indexing-vorder-v2.md
+```
+
+And the reason retrieval could not have supplied it:
+
+```
+plans/to-do/block-fractional-indexing-vorder-v2.md | unknown
+```
+
+Unclassified, so `get_context` can only ever offer it as an incidental
+keyword hit among 662 siblings, never as the decision that governs the
+change.
+
+This is the most precise statement of the gap the sprint produced. Not
+"the platform was ignored" — the platform held the winning card, could
+not name it as a card, and `grep` beat it to the table. Everything the
+taxonomy gap (#3) costs is visible in that one finding.
+
 ### What this says about where the value has actually been demonstrated
 
 Stated plainly, because the sprint asks for evidence rather than ideas:
@@ -335,10 +377,13 @@ repository:
 
 1. **Unclassifiable documents** — `KERNEL_REQUIREMENTS.md` #3. Third
    sighting: 36% here, 91% on the outside project, and the org's own
-   `KERNEL_POLICY`, `VISION` and `SYSTEM_MAP` among them. This is now the
-   single biggest limit on the tool's usefulness, and it blocks adoption
-   rather than merely degrading it. Not fixed — it needs a decision about
-   the taxonomy, not code.
+   `KERNEL_POLICY`, `VISION` and `SYSTEM_MAP` among them. Run 5 priced it
+   exactly: the document carrying that review's blocking finding was
+   indexed, unclassified, and therefore unreachable as anything but a
+   keyword hit — while `grep` found it in one call. This is the single
+   biggest limit on the tool's usefulness, and it blocks adoption rather
+   than merely degrading it. Not fixed: it needs a decision about the
+   taxonomy, not code.
 2. **A better-targeted skill wins** — second sighting (Sprint 11 Run 0,
    Sprint 12 Run 5), with opposite implications each time. Worth watching
    before acting: in the second case losing was the correct outcome.
