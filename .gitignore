@@ -1,2 +1,11 @@
+# Anchored. Unanchored, this matches at any depth — including the
+# directory cmd/engineering-mcp, which kept the server's main package out
+# of every commit from Sprint 8 until a review of this repository, by
+# this repository, noticed the clone could not build.
+/engineering-mcp
+
 .eng/
-engineering-mcp
+
+# Written per-machine from integration/claude-code/mcp.json.example; holds
+# absolute local paths.
+.mcp.json

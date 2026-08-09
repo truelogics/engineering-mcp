@@ -25,6 +25,18 @@ capabilities and the same adapters. Naming it for the protocol keeps
 that honest — nothing in `internal/tools` knows it is being reached over
 MCP, and nothing in `internal/mcp` knows what a rule is.
 
+## Getting started
+
+| | |
+|---|---|
+| [`QUICKSTART.md`](QUICKSTART.md) | ten minutes, from nothing to a repository-aware review |
+| [`INSTALL.md`](INSTALL.md) | the same install with what each step produces and what goes wrong |
+| [`ONBOARDING.md`](ONBOARDING.md) | making one repository Engineering OS aware |
+| [`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md) | the Claude Code side: registering, verifying, troubleshooting |
+
+`engineering-mcp doctor` checks a machine end to end and names the first
+thing that is wrong.
+
 ## The tools
 
 | Tool | Answers | Validated by |
@@ -32,29 +44,31 @@ MCP, and nothing in `internal/mcp` knows what a rule is.
 | `search_memory` | "What has been written about this?" | `eng search` |
 | `get_context` | "What engineering context surrounds this task?" | AI Review's `Reviewer` |
 | `find_engineering_rules` | "What rules govern these files?" | AI Review, Sprint 7 |
+| `verify_evidence` | "Does this quote really appear in that document?" | AI Review's `Validator`; promoted to the kernel by RFC-0006 |
 
-Three, not five. Every tool here satisfies
+Four, not five. Every tool here satisfies
 [`KERNEL_POLICY.md`](../engineering/KERNEL_POLICY.md) Rule #6 — it
 already exists as a capability a real consumer proved useful. Two of the
 five tools originally proposed for this repository do not, and are
 deliberately absent.
 
-### Rejected: `collect_evidence`
+### Once rejected, then promoted: evidence verification
 
-Evidence verification — checking that a quoted excerpt really appears in
-the document it cites, and scoring how well — is real, works, and is
-covered by tests. It lives in AI Review's `Validator`, and nowhere else.
-`engineering/CAPABILITIES.md` classifies it **Consumer-only** for exactly
-this reason.
+The fourth tool was originally proposed as `collect_evidence` and
+rejected. Checking that a quoted excerpt really appears in the document it
+cites was real, tested, and lived in AI Review's `Validator` and nowhere
+else — so exposing it here meant either duplicating an anti-hallucination
+check, leaving two implementations to drift apart, or promoting it into
+the kernel.
 
-Exposing it here would mean either duplicating `Validator` — which this
-repository is explicitly forbidden from doing, and which would leave two
-implementations of an anti-hallucination check to drift apart — or
-promoting it into the kernel, which is a kernel change and not this
-sprint's work.
+ai-memory RFC-0006 promoted it, and `verify_evidence` is now the four-line
+adapter that was predicted. It is named for what it does — verifying a
+quote a client proposes — rather than `collect_evidence`, which would
+imply the kernel searches for supporting text. It does not, and no
+consumer has asked it to.
 
-It is the strongest candidate for promotion. Once it lives in
-`pkg/memory`, this tool becomes a four-line adapter.
+This is the sequence Rule #6 is meant to produce: consumer proves it,
+kernel adopts it, transport exposes it. Not transport invents it.
 
 ### Rejected: `get_architecture_context`
 
@@ -73,34 +87,38 @@ not overclaim.
 
 ## Requirements
 
-An indexed AI Memory workspace. The server never indexes anything — it
-reads what `eng` has already built:
-
-```bash
-eng workspace create .
-eng workspace attach ../engineering      # the organization's rulebook
-eng workspace attach ../your-application
-eng index .
-```
+Go 1.25+, git, and an indexed AI Memory workspace. The server never
+indexes anything — it reads what `eng` has already built. `ai-memory` must
+be checked out as a sibling directory of this one; `go.mod` resolves the
+kernel by path.
 
 ## Running it
 
 ```bash
 go build -o engineering-mcp ./cmd/engineering-mcp
-./engineering-mcp --workspace /path/to/workspace
+
+./engineering-mcp                                  # serve; resolves a workspace itself
+./engineering-mcp --workspace /path/to/workspace   # serve a named workspace
+./engineering-mcp doctor                           # check this machine
 ```
+
+With no `--workspace`, it resolves one at startup: the nearest workspace
+at or above the working directory, then `$ENGINEERING_WORKSPACE`. That is
+what lets a single registered server answer for every repository instead
+of the one it was configured for. It reports which workspace it chose,
+and why, on stderr.
 
 It speaks JSON-RPC 2.0 over stdin/stdout. Nothing else is ever written to
 stdout — diagnostics go to stderr, because a stray line on stdout
 corrupts the protocol.
 
-Starting against a directory with no `.eng/memory.db` is a hard failure,
-not an empty workspace. A server answering every question with "nothing
-found" is indistinguishable from one whose knowledge base is simply
-quiet (`engineering/rules/no-silent-fallback.md`).
+Finding no workspace at all is a hard failure, not an empty one. A server
+answering every question with "nothing found" is indistinguishable from
+one whose knowledge base is simply quiet
+(`engineering/rules/no-silent-fallback.md`).
 
-See [`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md) for client setup and a
-worked example.
+`doctor` reports to stdout instead, because nothing is speaking a protocol
+to it.
 
 ## Architecture
 

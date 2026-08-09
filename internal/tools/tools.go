@@ -30,12 +30,14 @@ type KnowledgeSource interface {
 	ContextFor(ctx context.Context, task string, opts memory.ContextOptions) (memory.ContextPackage, error)
 }
 
-// All returns every tool this server exposes, bound to src.
-func All(src KnowledgeSource) []mcp.Tool {
+// All returns every tool this server exposes, bound to src. workspace is
+// the directory the knowledge came from, named in rule answers so a
+// reader can tell which rulebook spoke.
+func All(src KnowledgeSource, workspace string) []mcp.Tool {
 	return []mcp.Tool{
 		searchMemory(src),
-		getContext(src),
-		findEngineeringRules(src),
+		getContext(src, workspace),
+		findEngineeringRules(src, workspace),
 		verifyEvidence(src),
 	}
 }
@@ -60,12 +62,15 @@ func verifyEvidence(src KnowledgeSource) mcp.Tool {
 			"task":     stringProp("The task whose context contains the document, e.g. 'cache permission lookups'."),
 			"document": stringProp("The document to verify against, ideally repository-qualified, e.g. 'engineering:rules/logging.md'."),
 			"excerpt":  stringProp("The exact text you intend to quote from that document."),
+			"changed_paths": stringArrayProp("The same files you passed to find_engineering_rules or get_context. " +
+				"Required to verify a quote from a rule, because rules are selected by path scope and are absent from an unscoped context."),
 		}, "task", "document", "excerpt"),
 		Handler: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
-				Task     string `json:"task"`
-				Document string `json:"document"`
-				Excerpt  string `json:"excerpt"`
+				Task         string   `json:"task"`
+				Document     string   `json:"document"`
+				Excerpt      string   `json:"excerpt"`
+				ChangedPaths []string `json:"changed_paths"`
 			}
 			if err := decode(raw, &args); err != nil {
 				return "", err
@@ -76,18 +81,28 @@ func verifyEvidence(src KnowledgeSource) mcp.Tool {
 				}
 			}
 
-			pkg, err := src.ContextFor(ctx, args.Task, memory.ContextOptions{})
+			// The same options the other tools use. Verifying against an
+			// unscoped context was a silent trap: rules are selected by
+			// path scope, so a rule find_engineering_rules had just
+			// returned was absent here, and a verbatim quote from it came
+			// back NOT VERIFIED. See docs/reports/SPRINT_11_VALIDATION.md.
+			pkg, err := src.ContextFor(ctx, args.Task, memory.ContextOptions{ChangedPaths: args.ChangedPaths})
 			if err != nil {
 				return "", err
 			}
 
 			ev, ok := pkg.VerifyEvidence(args.Document, args.Excerpt)
 			if !ok {
+				hint := ""
+				if len(args.ChangedPaths) == 0 {
+					hint = "\n\nYou passed no changed_paths. If this quote comes from an engineering rule, pass the same files you gave " +
+						"find_engineering_rules — rules are selected by path scope and are not in an unscoped context."
+				}
 				return fmt.Sprintf(
 					"NOT VERIFIED. %q does not match any text retrieved for %s.\n\n"+
 						"This means one of: the document wasn't among the context for this task, the quote isn't in the passage that was retrieved, "+
-						"or the reference is ambiguous across repositories (qualify it as 'repository:path'). Do not present this as a citation.",
-					args.Excerpt, args.Document), nil
+						"or the reference is ambiguous across repositories (qualify it as 'repository:path'). Do not present this as a citation.%s",
+					args.Excerpt, args.Document, hint), nil
 			}
 			return fmt.Sprintf("VERIFIED (%s confidence)\n\nDocument: %s\nQuote: %q",
 				ev.Confidence, ev.Qualified(), ev.Excerpt), nil
@@ -138,7 +153,7 @@ func searchMemory(src KnowledgeSource) mcp.Tool {
 	}
 }
 
-func getContext(src KnowledgeSource) mcp.Tool {
+func getContext(src KnowledgeSource, workspace string) mcp.Tool {
 	return mcp.Tool{
 		Name: "get_context",
 		Description: "Gather all engineering context relevant to a task — related documents, ADRs, and the engineering rules that govern it. " +
@@ -164,12 +179,12 @@ func getContext(src KnowledgeSource) mcp.Tool {
 			if err != nil {
 				return "", err
 			}
-			return renderContext(args.Task, pkg), nil
+			return renderContext(args.Task, pkg, workspace), nil
 		},
 	}
 }
 
-func findEngineeringRules(src KnowledgeSource) mcp.Tool {
+func findEngineeringRules(src KnowledgeSource, workspace string) mcp.Tool {
 	return mcp.Tool{
 		Name: "find_engineering_rules",
 		Description: "Find the engineering rules that govern specific files. " +
@@ -201,8 +216,16 @@ func findEngineeringRules(src KnowledgeSource) mcp.Tool {
 				return "", err
 			}
 			if len(pkg.Rules) == 0 {
-				return fmt.Sprintf("No engineering rule governs %s.\n\nThat is an answer, not an omission: no rule in this organization's rulebook declares it applies to these files.",
-					strings.Join(args.ChangedPaths, ", ")), nil
+				// The second paragraph is not padding. This exact message
+				// was returned confidently by a workspace holding zero
+				// rules, which reads identically to a rulebook that was
+				// consulted and had nothing to say
+				// (engineering:rules/no-silent-fallback.md).
+				return fmt.Sprintf("No engineering rule governs %s.\n\n"+
+					"That is an answer, not an omission: no indexed rule declares it applies to these files.\n\n"+
+					"If that is surprising, check which workspace answered — `eng workspace list`. A workspace holding only "+
+					"your application has no rulebook to consult, and its answer looks exactly like this one.%s",
+					strings.Join(args.ChangedPaths, ", "), answeredBy(workspace)), nil
 			}
 
 			var b strings.Builder
@@ -210,6 +233,11 @@ func findEngineeringRules(src KnowledgeSource) mcp.Tool {
 			for _, r := range pkg.Rules {
 				fmt.Fprintf(&b, "- %s\n  %s\n\n", qualify(r.Repository, r.Path), clean(r.Snippet))
 			}
+			// Named on every answer, not only the empty one. A workspace
+			// holding a few stale or wrong rules returns them with total
+			// confidence, and that answer is indistinguishable from a
+			// correct one unless it says where it came from.
+			b.WriteString(strings.TrimPrefix(answeredBy(workspace), "\n"))
 			return b.String(), nil
 		},
 	}
@@ -219,7 +247,7 @@ func findEngineeringRules(src KnowledgeSource) mcp.Tool {
 // empty are named rather than omitted, because "no rule governs this"
 // and "I didn't look" are different answers and a model cannot tell them
 // apart from silence.
-func renderContext(task string, pkg memory.ContextPackage) string {
+func renderContext(task string, pkg memory.ContextPackage, workspace string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Engineering context for: %s\n", task)
 
@@ -237,7 +265,22 @@ func renderContext(task string, pkg memory.ContextPackage) string {
 	section("Engineering rules governing these files", pkg.Rules)
 	section("Architecture decision records", pkg.ADRs)
 	section("Related documents", pkg.RelevantFiles)
+	// Named here for the same reason as on find_engineering_rules, and
+	// missed here at first: this tool returns rules too, its description
+	// recommends it as the broadest capability, and a reviewer who uses
+	// only this one was getting rules from an unnamed source.
+	b.WriteString(answeredBy(workspace))
 	return b.String()
+}
+
+// answeredBy names the workspace a rule answer came from. Empty when the
+// caller did not supply one, so tests and library users are not forced
+// to invent a path.
+func answeredBy(workspace string) string {
+	if strings.TrimSpace(workspace) == "" {
+		return ""
+	}
+	return fmt.Sprintf("\n(Answered from the workspace at %s.)\n", workspace)
 }
 
 // qualify names a document as repository:path. A workspace holds several

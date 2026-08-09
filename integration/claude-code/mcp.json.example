@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "engineering": {
+      "command": "/absolute/path/to/engineering-mcp",
+      "env": {
+        "ENGINEERING_WORKSPACE": "/absolute/path/to/your/indexed/workspace"
+      }
+    }
+  }
+}

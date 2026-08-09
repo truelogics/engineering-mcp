@@ -30,7 +30,7 @@ func (f *fakeSource) ContextFor(ctx context.Context, task string, opts memory.Co
 
 func toolNamed(t *testing.T, src KnowledgeSource, name string) func(context.Context, json.RawMessage) (string, error) {
 	t.Helper()
-	for _, tool := range All(src) {
+	for _, tool := range All(src, "") {
 		if tool.Name == name {
 			return tool.Handler
 		}
@@ -41,7 +41,7 @@ func toolNamed(t *testing.T, src KnowledgeSource, name string) func(context.Cont
 
 func TestExposesOnlyRuleSixApprovedTools(t *testing.T) {
 	var names []string
-	for _, tool := range All(&fakeSource{}) {
+	for _, tool := range All(&fakeSource{}, "") {
 		names = append(names, tool.Name)
 	}
 	want := []string{"search_memory", "get_context", "find_engineering_rules", "verify_evidence"}
@@ -51,7 +51,7 @@ func TestExposesOnlyRuleSixApprovedTools(t *testing.T) {
 }
 
 func TestEveryToolAdvertisesADescriptionAndSchema(t *testing.T) {
-	for _, tool := range All(&fakeSource{}) {
+	for _, tool := range All(&fakeSource{}, "") {
 		if len(tool.Description) < 40 {
 			t.Errorf("%s: description is too thin for a model to choose the tool by", tool.Name)
 		}
@@ -150,6 +150,39 @@ func TestFindEngineeringRulesSaysSoWhenNoneApply(t *testing.T) {
 	if !strings.Contains(got, "No engineering rule governs") {
 		t.Errorf("output should state plainly that no rule applies:\n%s", got)
 	}
+	// Sprint 11: a workspace holding no rules at all returned this same
+	// confident sentence. The two cases are indistinguishable to a
+	// reader, so the message has to name the second one.
+	if !strings.Contains(got, "eng workspace list") {
+		t.Errorf("output must say how to check that a rulebook was actually consulted:\n%s", got)
+	}
+}
+
+// TestFindEngineeringRulesNamesTheWorkspaceThatAnswered: rules resolve
+// from whichever workspace the server found, and a stale one holding a
+// handful of wrong rules answers with exactly the confidence of a
+// correct one. Naming the source is what makes the two distinguishable.
+func TestFindEngineeringRulesNamesTheWorkspaceThatAnswered(t *testing.T) {
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/go-wrap-errors.md", Repository: "engineering", Snippet: "wrap with %w"},
+	}}}
+	var handler = func() func(context.Context, json.RawMessage) (string, error) {
+		for _, tool := range All(src, "/somewhere/workspace") {
+			if tool.Name == "find_engineering_rules" {
+				return tool.Handler
+			}
+		}
+		t.Fatal("tool missing")
+		return nil
+	}()
+
+	got, err := handler(context.Background(), json.RawMessage(`{"changed_paths":["a.go"]}`))
+	if err != nil {
+		t.Fatalf("find_engineering_rules: %v", err)
+	}
+	if !strings.Contains(got, "/somewhere/workspace") {
+		t.Errorf("output must name the workspace that answered:\n%s", got)
+	}
 }
 
 func TestFindEngineeringRulesFallsBackToPathsAsTask(t *testing.T) {
@@ -197,6 +230,42 @@ func TestVerifyEvidenceReportsFailureRatherThanDropping(t *testing.T) {
 	}
 }
 
+// TestVerifyEvidenceForwardsChangedPaths pins the Sprint 11 fix. Rules
+// are selected by path scope, so verifying against an unscoped context
+// rejected verbatim quotes from rules the server had just returned —
+// a gate that fails closed on true citations teaches a reviewer to stop
+// citing.
+func TestVerifyEvidenceForwardsChangedPaths(t *testing.T) {
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/logging.md", Repository: "engineering", Snippet: "All logging goes through internal/log."},
+	}}}
+	got, err := toolNamed(t, src, "verify_evidence")(context.Background(),
+		json.RawMessage(`{"task":"logging","document":"engineering:rules/logging.md","excerpt":"goes through internal/log","changed_paths":["internal/log/log.go"]}`))
+	if err != nil {
+		t.Fatalf("verify_evidence: %v", err)
+	}
+	if len(src.gotPaths) != 1 || src.gotPaths[0] != "internal/log/log.go" {
+		t.Errorf("changed_paths = %v, want them forwarded — a scoped rule is invisible to an unscoped context", src.gotPaths)
+	}
+	if !strings.Contains(got, "VERIFIED (high confidence)") {
+		t.Errorf("output = %q, want a verification", got)
+	}
+}
+
+// TestVerifyEvidenceSaysWhenScopeIsMissing: the likeliest cause of a
+// failed verification is a caller who omitted the paths, and a failure
+// message that does not name its likeliest cause is a dead end.
+func TestVerifyEvidenceSaysWhenScopeIsMissing(t *testing.T) {
+	got, err := toolNamed(t, &fakeSource{}, "verify_evidence")(context.Background(),
+		json.RawMessage(`{"task":"logging","document":"engineering:rules/logging.md","excerpt":"anything"}`))
+	if err != nil {
+		t.Fatalf("verify_evidence: %v", err)
+	}
+	if !strings.Contains(got, "no changed_paths") {
+		t.Errorf("output = %q, want the missing scope named as a likely cause", got)
+	}
+}
+
 func TestVerifyEvidenceRequiresAllThreeArguments(t *testing.T) {
 	for _, args := range []string{
 		`{"document":"a.md","excerpt":"x"}`,
@@ -206,5 +275,43 @@ func TestVerifyEvidenceRequiresAllThreeArguments(t *testing.T) {
 		if _, err := toolNamed(t, &fakeSource{}, "verify_evidence")(context.Background(), json.RawMessage(args)); err == nil {
 			t.Errorf("args %s: want an error", args)
 		}
+	}
+}
+
+// TestEveryToolThatReturnsRulesNamesItsSource.
+//
+// The argument for attribution was made for find_engineering_rules and
+// then not applied to get_context, which returns rules under its own
+// heading and whose description recommends it as the broadest
+// capability. A reviewer using only that tool got rules from an unnamed
+// workspace — and a workspace holding stale or wrong rules returns them
+// with total confidence, indistinguishable from a correct one unless it
+// says where it came from.
+func TestEveryToolThatReturnsRulesNamesItsSource(t *testing.T) {
+	const ws = "/somewhere/workspace-root"
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/logging.md", Repository: "engineering", Snippet: "Every error is wrapped"},
+	}}}
+
+	calls := map[string]string{
+		"get_context":            `{"task":"add caching","changed_paths":["internal/a.go"]}`,
+		"find_engineering_rules": `{"changed_paths":["internal/a.go"]}`,
+	}
+	for name, args := range calls {
+		t.Run(name, func(t *testing.T) {
+			var handler func(context.Context, json.RawMessage) (string, error)
+			for _, tool := range All(src, ws) {
+				if tool.Name == name {
+					handler = tool.Handler
+				}
+			}
+			got, err := handler(context.Background(), json.RawMessage(args))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(got, ws) {
+				t.Errorf("%s returned rules without naming the workspace they came from:\n%s", name, got)
+			}
+		})
 	}
 }
