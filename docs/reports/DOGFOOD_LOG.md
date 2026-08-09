@@ -622,3 +622,42 @@ verification was wrong in a way that only shows up on the upgrade path,
 and the review found that path without being told to look for it.
 
 It did so while calling Engineering OS zero times.
+
+## Sprint 15 — installing it as a stranger would
+
+Not a review run. A different kind of use, and it found more than the last
+three reviews put together.
+
+Installation was performed from scratch in an empty directory with a fake
+`$HOME` and only the documentation as a guide. Twelve findings, four of
+them blocking. The full record is
+[`SPRINT_15_CLEAN_MACHINE.md`](SPRINT_15_CLEAN_MACHINE.md); what belongs
+here is what it says about the dogfooding method itself.
+
+**The most severe bug was invisible to every review so far, and obvious
+within minutes of following the instructions.** `eng sync` synced the
+workspace directory alone, re-registering the root that the install
+instructions tell you to detach, and indexing every child repository's
+documents a second time under one name. Six dogfooding runs never touched
+it, because a developer who already has a working index never runs setup
+again. The install documentation was the test case.
+
+**Reviewing the code you wrote and installing the product you built are
+different exercises, and the second one had never been done.** Every
+finding in this log until now came from pointing the tool at a diff.
+Nothing pointed it at the gap between what the repository contains and
+what a stranger can do with it, and that gap included a default branch
+that does not compile.
+
+**One thing this confirms about Rule #8.** The rule asks which real review
+exposed a limitation. Nothing in it says the exposure has to be a review.
+`eng sync` was named by an installation, and the requirement recorded as
+`KERNEL_REQUIREMENTS.md` #6 was named by writing documentation. Both are
+usage; both produced reproducible evidence; neither would ever have been
+produced by a review of a diff.
+
+**The measurement to keep.** The claim that the documentation is now true
+does not rest on this log. It rests on `QUICKSTART.md` having been
+executed verbatim in an empty directory, producing a working install with
+no step that is not written down. That is repeatable, and it should be
+repeated the next time either repository's setup changes.

@@ -1,51 +1,113 @@
 ---
-doc: CLAUDE_CODE
+doc: RUNBOOK
 audience: [human, agent]
 status: living
 owner: engineering-mcp
-last_reviewed: 2026-08-09
+last_reviewed: 2026-08-10
 ---
 
-# Using engineering-mcp from Claude Code
+# Engineering OS in Claude Code
 
-## Setup
+Everything about the Claude Code side: registering the server, checking it
+works, what a normal session looks like, and what to do when it goes
+quiet.
 
-Installation lives in one place:
-[`integration/claude-code/README.md`](../integration/claude-code/README.md).
-It covers building the binaries, indexing a workspace, registering the
-server, and installing the `/review-branch` command.
+Building the binaries and indexing a workspace comes first —
+[`INSTALL.md`](../INSTALL.md).
 
-This document is the companion: what the tools are for and how to read
-what they return.
+## Registration
 
-Verify the server independently of any client before wiring it up:
+Once, at user scope, for every project on the machine:
 
 ```bash
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
-  | ./engineering-mcp --workspace /path/to/workspace
+claude mcp add engineering --scope user \
+  -e ENGINEERING_WORKSPACE="$HOME/engineering-os" \
+  -- "$HOME/.local/bin/engineering-mcp"
 ```
 
-## What changes
+Two arguments are doing real work.
 
-Without this server, an assistant editing your code knows general
-engineering practice. With it, it can ask what *your organization* has
-already decided — and cite it.
+`--scope user` registers it for every project rather than one. That is the
+point of the design: the server resolves a workspace at each start from
+the directory Claude Code was opened in, so one registration serves every
+repository. A server pinned to one absolute path serves the project it was
+configured for and quietly serves the wrong knowledge everywhere else.
 
-The division of labor is strict:
+`-e ENGINEERING_WORKSPACE=...` is the fallback for projects that are not
+themselves inside a workspace. Resolution order:
 
-- **Claude Code** decides what to look up, reasons about the answer, and
-  writes the code.
-- **engineering-mcp** answers questions about engineering knowledge.
+1. `--workspace`, if you pass one (you usually should not);
+2. the nearest indexed workspace at or above the working directory;
+3. `$ENGINEERING_WORKSPACE`.
 
-The server never proposes a change, never judges one, and never decides
-which tool to call.
+Project scope instead, if you would rather commit the configuration: copy
+[`mcp.json.example`](../integration/claude-code/mcp.json.example) to
+`.mcp.json` at your project root and approve it when Claude Code asks.
 
-## A worked example
+## The command that makes the tools reachable
 
-Asked to add a caching layer to permission checks, a client with these
-tools available would typically do this:
+```bash
+mkdir -p ~/.claude/commands
+cp integration/claude-code/review-branch.md ~/.claude/commands/
+```
 
-**1. Find the rules that govern the files it is about to touch.**
+Install this. It is not a shortcut for something you could do by hand.
+
+Claude Code defers tool schemas on a machine with several MCP servers
+installed: the tool's schema is absent from the model's prompt, and the
+tool cannot be called at all until something names it and its schema is
+fetched. `review-branch.md` names these four tools, which is what loads
+them.
+
+Measured, same repository and same commit, varying only whether the
+command was available:
+
+| | `ToolSearch` | Engineering MCP calls | tool calls total |
+|---|---|---|---|
+| command available | 1 | **3** | 40 |
+| command unavailable | 0 | **0** | 42 |
+
+Forty-two tool calls, zero of them to a server that was registered,
+connected, and explicitly allowed. Full account:
+[`reports/TOOL_DISCOVERY_EXPERIMENT.md`](reports/TOOL_DISCOVERY_EXPERIMENT.md).
+
+## Verification
+
+```bash
+engineering-mcp doctor
+```
+
+Run it from inside the repository you want to review, not from the
+workspace root — several checks are about *this* repository specifically,
+and the answer differs by directory.
+
+To check the server alone, without Claude Code in the picture:
+
+```bash
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  | engineering-mcp
+```
+
+You should get two JSON lines on stdout and one `serving <workspace>` line
+on stderr. Anything else on stdout is a bug: stdout is the JSON-RPC
+channel and a stray line corrupts the protocol without corrupting anything
+you can see. `doctor`'s handshake check tests exactly this.
+
+## What a session looks like
+
+```
+cd your-repository
+claude
+```
+
+> Review my current branch.
+
+Claude Code derives the repository, branch, base and changed files from
+git, then:
+
+**1. Finds the rules that govern those files.**
 
 ```json
 {"name": "find_engineering_rules",
@@ -53,11 +115,11 @@ tools available would typically do this:
                "task": "cache permission lookups in process"}}
 ```
 
-Rules come back selected by what they *govern*, not by keyword — a
-change rarely mentions the rule it breaks. This is the difference
-between a rulebook that gets read and one that gets skimmed.
+Rules come back selected by what they *govern*, not by keyword — a change
+rarely mentions the rule it breaks. This is the difference between a
+rulebook that gets read and one that gets skimmed.
 
-**2. Gather the surrounding context.**
+**2. Gathers the surrounding context.**
 
 ```json
 {"name": "get_context",
@@ -66,51 +128,100 @@ between a rulebook that gets read and one that gets skimmed.
 ```
 
 If the organization rejected in-process permission caching after an
-incident, the ADR recording that comes back here — and the assistant can
-say "ADR-0003 rejected this after the March incident, where a revoked
-administrator kept access for eleven minutes," rather than "caching can
-serve stale data."
+incident, the ADR recording that comes back here — and the review can say
+"ADR-0003 rejected this after the March incident, where a revoked
+administrator kept access for eleven minutes", rather than "caching can
+serve stale data".
 
 Both are correct. Only one is checkable, and only one tells you the
 argument has already been had.
 
-**3. Search for anything more specific.**
+**3. Searches for anything more specific.**
 
 ```json
 {"name": "search_memory",
  "arguments": {"query": "permission cache invalidation", "limit": 5}}
 ```
 
-Every result is qualified as `repository:path`, because a workspace holds
-several repositories and `README.md` is ambiguous across them.
+**4. Verifies each quote before attributing it.**
+
+```json
+{"name": "verify_evidence",
+ "arguments": {"task": "cache permission lookups in process",
+               "document": "engineering:adr/0003-no-permission-cache.md",
+               "excerpt": "in-process permission caches are not permitted",
+               "changed_paths": ["internal/authz/check.go"]}}
+```
+
+Pass the same `changed_paths` you gave the other tools. Rules are selected
+by path scope and are simply absent from an unscoped context, so a
+verbatim quote from a rule verifies as `NOT VERIFIED` without them. That
+was a real failure, diagnosed in
+[`reports/SPRINT_11_VALIDATION.md`](reports/SPRINT_11_VALIDATION.md).
+
+The server does none of the reasoning. It never proposes a change, never
+judges one, and never decides which tool to call.
 
 ## Reading the answers
 
 **An empty result is an answer.** `find_engineering_rules` returning
-nothing means no rule in the rulebook declares it governs those files —
-not that the lookup failed. The tools state this explicitly rather than
-returning silence, because a model cannot otherwise distinguish "nothing
-applies" from "I didn't look."
+nothing means no indexed rule declares it governs those files — not that
+the lookup failed. The tools say so explicitly, because a model cannot
+otherwise tell "nothing applies" from "I didn't look".
+
+**Every answer names the workspace it came from.** Not only the empty
+ones. A workspace holding a few stale or wrong rules returns them with
+total confidence, and that answer is indistinguishable from a correct one
+unless it says where it came from.
 
 **Scores are relative to one query.** They order results within a single
-call and mean nothing across calls.
+call and mean nothing across calls. A 0.00 score is noise, not a weak
+match.
 
-**Snippets are short.** The kernel returns search highlights of roughly
-40–200 characters, not full documents
-(`ai-review/KERNEL_REQUIREMENTS.md` #15). Enough to judge whether a
-document is worth opening; not enough to quote a paragraph. When the
-excerpt matters, read the file at the path given.
+**Snippets are short.** Roughly 40–200 characters of search highlight, not
+full documents. Enough to judge whether a document is worth opening; not
+enough to quote a paragraph. When the excerpt matters, read the file at
+the path given.
 
-## Troubleshooting
+**Documents are `repository:path`.** A workspace holds several
+repositories and `README.md` is ambiguous across them.
 
-**"no indexed workspace at ..."** — the path has no `.eng/memory.db`.
-Run `eng workspace create .` there, attach repositories, and `eng index .`.
+## Common problems
 
-**Rules come back empty for every file** — check `eng workspace list`
-shows the repository holding your rules. A workspace containing only
-your application has no rulebook to consult.
+**Claude Code never calls the tools.** By far the most common, and it
+looks exactly like the server being broken. Check `/review-branch` is
+installed. See the table above.
 
-**A rule you expected is missing** — check its `applies_to` front matter.
-A rule declaring `applies_to: "**/*.ts"` will not appear for a Go
-change, by design. A rule with no `applies_to` is universal and always
-appears.
+**"No MCP server found with name: engineering".** Not registered, or
+registered at project scope in a different project. `claude mcp get
+engineering` shows scope and status.
+
+**Registered and connected, but your changes have no effect.** Claude Code
+is launching a different binary than the one you rebuilt. `claude mcp get
+engineering` prints the command it runs; compare it with `which
+engineering-mcp`. `doctor` compares them for you.
+
+**"no indexed workspace found at or above ...".** You are outside every
+workspace and `ENGINEERING_WORKSPACE` is unset. The error prints both
+fixes. This is a hard failure on purpose: a server answering every
+question with "nothing found" is indistinguishable from one whose
+knowledge base is simply quiet.
+
+**Rules come back empty for every file.** Usually the workspace that
+answered holds no rulebook. `eng workspace list` shows what is in it.
+
+**A rule you expected is missing.** Check its `applies_to`. A rule
+declaring `applies_to: "**/*.ts"` will not appear for a Go change, by
+design. A rule with no `applies_to` is universal and always appears.
+
+**The wrong workspace answered.** Resolution takes the *nearest*
+workspace, so a stale `.eng/` inside a single repository beats the one
+above it. The server prints its choice on stderr; `doctor` prints it too.
+
+**A citation verifies as NOT VERIFIED although the quote is exact.** Two
+causes. Either `changed_paths` was omitted and the document is a rule (see
+step 4 above), or the quote is in the document but not in the ~200
+character snippet that was retrieved — the kernel matches against the
+snippet, not the file. The second is a known kernel limitation, recorded
+as [`KERNEL_REQUIREMENTS.md`](../KERNEL_REQUIREMENTS.md) #2 rather than
+worked around here.

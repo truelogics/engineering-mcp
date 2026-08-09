@@ -17,7 +17,7 @@ written down. A requirement is not recorded until the gap has been
 reproduced — a rule this organization learned by recording a blocker twice,
 in opposite directions, from documentation rather than from behavior.
 
-Neither item below was worked around in this repository. Per the Kernel
+Nothing below was worked around in this repository. Per the Kernel
 Rule, a consumer that discovers a kernel limitation records it and stops.
 
 ## 1. ~~`Search` passes its query to FTS5 unescaped, so a hyphen is a crash~~ — RESOLVED (Sprint 11)
@@ -238,3 +238,32 @@ the CLI prints them. The first run after the change immediately named a
 real defect in the outside project — a plan file whose front-matter block
 had been mangled by a formatter into `## title:` and never closed — which
 had been silently absent from that project's index.
+
+## 6. Two canonical types cannot be declared in front matter — first sighting
+
+RFC-0007 established eight canonical types, and `.engineering.yaml` can
+map a directory onto any of them. A *document* cannot: the parser's
+front-matter switch maps `RFC`, `ADR`, `RULE`, `ARCHITECTURE` (and its
+aliases), `ROADMAP` and `README`, and nothing else. `doc: GUIDE` and
+`doc: SPECIFICATION` fall through to `unknown`, although
+`DocTypeGuide` and `DocTypeSpecification` both exist and both are
+reachable through a taxonomy file.
+
+Reproduced in this repository while writing Sprint 15's install
+documentation. `INSTALL.md`, `QUICKSTART.md` and `ONBOARDING.md` all
+carry front matter, all describe themselves accurately, and all indexed
+as `unknown` — so the four documents whose entire purpose is to be found
+by someone who does not know where to look were the ones retrieval could
+not name.
+
+The workaround here is the taxonomy file, which is the intended tool and
+does work: `.engineering.yaml` maps them to `Guide` and they now return
+under a Guides heading. It is a workaround nonetheless, because a
+document that states its own type should not need a second file to
+restate it, and because the precedence rule — front matter wins over
+taxonomy — cannot apply to a value front matter is unable to express.
+
+Not worked around in this repository, and deliberately not fixed here:
+adding two cases to the kernel's switch is a kernel change, and Sprint 15
+is a developer-experience sprint. Recorded, with the review that exposed
+it named, per `engineering:KERNEL_POLICY.md` Rule #8.

@@ -1,0 +1,17 @@
+# What this repository's directories mean, for Engineering OS (RFC-0007).
+#
+# Front matter always wins; these lines only classify documents that would
+# otherwise be `unknown`. Which, before this file existed, was most of
+# them: the kernel maps `doc: RFC`, `ADR`, `RULE`, `ARCHITECTURE`,
+# `ROADMAP` and `README` from front matter and nothing else, so the
+# install guides and the dogfooding reports were indexed, searchable and
+# semantically invisible — the exact failure RFC-0007 was written for,
+# found in this repository during Sprint 15.
+taxonomy:
+  INSTALL.md:                Guide
+  QUICKSTART.md:             Guide
+  ONBOARDING.md:             Guide
+  KERNEL_REQUIREMENTS.md:    Specification
+  docs/CLAUDE_CODE.md:       Guide
+  docs/reports/**:           Reference
+  integration/**:            Guide
