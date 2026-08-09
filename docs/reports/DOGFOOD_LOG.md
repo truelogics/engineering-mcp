@@ -212,7 +212,7 @@ died mid-response on a transport error. Cost is $1.30–$1.56 and wall time
 240–380s per review, which is affordable per branch and would not be per
 commit.
 
-### Questions for the observation week
+### Questions for the observation week (asked after Sprint 11)
 
 1. Does retrieval ever move ahead of reading the code, or is confirming a
    read understanding the honest workflow?
@@ -223,3 +223,134 @@ commit.
    `deterministic-stages`, `no-internal-imports` and
    `rfc-before-public-api-change` were retrieved and dismissed in both
    runs — candidates for narrower `applies_to`, not deletion.
+
+---
+
+# Sprint 12 — the first repository outside this organization
+
+Target 2 of Sprint 12: use Engineering OS on real software projects. This
+section records the first one, because almost everything it exposed was
+invisible from inside repositories written alongside the tool.
+
+## Run 5 — pivot / feature/vorder-v2-backend
+
+| | |
+|---|---|
+| Repository | `pivot` — a 12,552-file polyglot monorepo (TypeScript, Go, protobuf), unrelated to Engineering OS |
+| Branch | `feature/vorder-v2-backend`, 90 commits, 85 files, +5,773 / −193 |
+| Workspace | `pivot/.eng`, resolved by walk-up |
+| Engineering OS tool calls | **0** |
+
+### Setup exposed two kernel limitations before a review was possible
+
+**Indexing did not finish.** After ten minutes the database had passed
+233 MB and had not left the first directory. The collector skipped a
+fixed list of names — `.git`, `node_modules`, `vendor` — which is
+indistinguishable from correct on this organization's repositories.
+
+| | markdown files |
+|---|---|
+| tracked by git | 726 |
+| offered to the collector | **22,445** |
+| git-ignored | 21,719 (96.8%) |
+| agent plugin caches under `.claude/` | 21,690 |
+
+Fixed by asking git what the project disowns. After: **727 scanned, 19
+seconds, 24 MB**. `KERNEL_REQUIREMENTS.md` #4.
+
+**The first clean run reported `1 errors` and named nothing** — no file,
+no stage, no cause. `IndexResult` counted errors and discarded every
+error value. This had already cost this organization once, unrecognised:
+four engineering rules were silently unindexed in Sprint 7 by invalid
+front matter, and the only signal was the same bare count. Two
+occurrences, months apart, same missing information.
+
+Fixed. The first run after printed the cause, which was a real defect in
+the project: a plan file whose front-matter block a formatter had mangled
+into `## title:` and never closed, silently absent from its index.
+`KERNEL_REQUIREMENTS.md` #5.
+
+### The project has knowledge; Engineering OS can classify none of it
+
+| doc_type | documents |
+|---|---|
+| **unknown** | **662** |
+| readme | 64 |
+| rule / adr / rfc / standard / architecture | **0** |
+
+91% unclassified, against 36% inside this organization. The project is
+not undocumented — it has 416 planning documents, a 72-document
+engineering handbook and 124 test documents. It simply does not use
+`doc:` front matter, which is the state of every repository on the day it
+adopts Engineering OS.
+
+So `find_engineering_rules` returns nothing, `get_context` reports no
+ADRs, and the handbook — where that project's engineering standards
+actually live — is reachable only as a keyword hit indistinguishable from
+an incidental match. Verified directly against the running server. The
+new disclosure fired correctly, which is the right behaviour and not a
+substitute for having something to say.
+
+### The finding that matters most: it was never reached
+
+Asked "Review my current branch", the model loaded four of the project's
+own review skills — a `review-pull-requests` router, a `review-pivot`
+product overlay, `review-protobuf`, `review-pivot-proto` — read the
+protobuf contracts, and reviewed the branch in domain terms. It called
+Engineering OS **zero times**.
+
+That machine carries 20 user-level review skills (`review-pivot`,
+`review-nats`, `review-messaging`, `review-realtime`, …) and 11 more
+inside the project. This is not the Sprint 11 Run 0 failure, where a
+generic `code-review` skill crowded out retrieval that would have helped.
+Here the competing skills were **better**: purpose-built, domain-specific,
+carrying a `lessons.yaml` of accumulated review history. And Engineering
+OS had nothing to counter with — no rules, no ADRs, no classified
+architecture.
+
+Both facts point the same way. On this project Engineering OS was not
+merely unused; it had no answer worth interrupting for.
+
+### What this says about where the value has actually been demonstrated
+
+Stated plainly, because the sprint asks for evidence rather than ideas:
+
+- Every review where Engineering OS changed the outcome — Sprint 11's
+  seven findings, Sprint 12's repository-that-never-built — was **inside
+  the organization whose rulebook it was built alongside**.
+- On the first outside project it contributed nothing to the review, and
+  the two things it did contribute were kernel bug reports produced by
+  *setup*, not by retrieval.
+- Its value is currently a function of `applies_to`-scoped rules and
+  classified documents. A project with neither gets a working tool with
+  an empty rulebook.
+
+That is not an argument against the platform. It is a measurement of what
+adoption actually requires, and it was not visible from inside.
+
+## Recurring problems, by the improvement policy
+
+Only these have occurred more than once or across more than one
+repository:
+
+1. **Unclassifiable documents** — `KERNEL_REQUIREMENTS.md` #3. Third
+   sighting: 36% here, 91% on the outside project, and the org's own
+   `KERNEL_POLICY`, `VISION` and `SYSTEM_MAP` among them. This is now the
+   single biggest limit on the tool's usefulness, and it blocks adoption
+   rather than merely degrading it. Not fixed — it needs a decision about
+   the taxonomy, not code.
+2. **A better-targeted skill wins** — second sighting (Sprint 11 Run 0,
+   Sprint 12 Run 5), with opposite implications each time. Worth watching
+   before acting: in the second case losing was the correct outcome.
+3. **Evidence verification fails on true quotes** — `KERNEL_REQUIREMENTS.md`
+   #2, hit once in each completed Sprint 11 review. Unfixed by choice.
+4. **Retrieval runs second** — every completed run so far. The tools
+   confirm an understanding built by reading code rather than forming it.
+   Still an observation, not yet a problem anyone has felt.
+
+## Not acted on
+
+Isolated incidents, recorded and left alone per the improvement policy:
+the `pending` MCP status seen once at init in `pivot` (a startup-timing
+artifact — the server answered correctly when driven directly), and the
+transport errors that killed two of four Sprint 11 runs.

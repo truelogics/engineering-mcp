@@ -134,3 +134,77 @@ compliance and produces none.
 **Not needed:** consumers guessing document classes from paths or titles.
 That would put the taxonomy in two places and make the kernel's answer the
 less authoritative one.
+
+### Second sighting, on an outside project (Sprint 12)
+
+The first real project Engineering OS was pointed at is a 12,500-file
+polyglot monorepo with substantial written knowledge: 416 planning
+documents, a 72-document engineering handbook, 124 test documents.
+
+Indexed, it classifies as:
+
+| doc_type | documents |
+|---|---|
+| **unknown** | **662** |
+| readme | 64 |
+| rule / adr / rfc / standard / architecture | **0** |
+
+91% unclassified, against 36% inside this organization. The project uses
+no `doc:` front matter at all, which is the normal state of a repository
+that has not adopted this convention — that is, every repository, on the
+day it adopts Engineering OS.
+
+The consequence is not degraded review, it is no grounding whatsoever:
+`find_engineering_rules` can return nothing, `get_context` reports no
+ADRs, and the 72-document handbook — which is where that project's
+engineering standards actually live — is reachable only as keyword-matched
+"related documents", indistinguishable from an incidental hit.
+
+This moves the requirement from an organization's own inconsistency to
+the adoption path for every new project.
+
+## 4. Collecting a real project ingests what the project has disowned — FIXED (Sprint 12)
+
+Recorded because the shape recurs, and because the fix is a precedent for
+where this kind of knowledge belongs.
+
+`filesystem.Collector` skipped a fixed set of directory names — `.git`,
+`node_modules`, `vendor`. On this organization's repositories that is
+indistinguishable from correct. On the first outside project:
+
+| | markdown files |
+|---|---|
+| tracked by git | 726 |
+| offered to the collector | **22,445** |
+| of those, git-ignored | 21,719 (96.8%) |
+| of those, tool caches under `.claude/` | 21,690 |
+
+Indexing had not finished after ten minutes and the database had passed
+233 MB, all of it agent plugin caches. After the fix: 727 scanned, 19
+seconds, 24 MB.
+
+A fixed list of names cannot express what a project considers its own,
+and extending it is whack-a-mole — `.claude` today, the next tool's
+directory tomorrow. Every repository already publishes the answer in
+`.gitignore`. The collector now asks git, in one batched `check-ignore`
+call, and keeps every path when git cannot answer: narrowing scope is an
+optimization, and silently indexing *less* than asked would be the worse
+failure.
+
+## 5. An index error count names neither the file nor the cause — FIXED (Sprint 12)
+
+`IndexResult` carried `Errors int` and discarded every error value. A
+developer saw `727 scanned, 726 added, 1 errors` and had nowhere to
+start — no file, no stage, no reason.
+
+Recorded rather than merely fixed because it had already cost this
+organization once and was not recognized: in Sprint 7 four engineering
+rules were silently unindexed by invalid `applies_to` front matter, and
+the only signal was the same bare count. Two occurrences, the same
+missing information, months apart.
+
+`IndexResult.Failures` now carries a path and a reason per failure, and
+the CLI prints them. The first run after the change immediately named a
+real defect in the outside project — a plan file whose front-matter block
+had been mangled by a formatter into `## title:` and never closed — which
+had been silently absent from that project's index.
