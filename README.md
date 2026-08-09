@@ -99,8 +99,11 @@ not an empty workspace. A server answering every question with "nothing
 found" is indistinguishable from one whose knowledge base is simply
 quiet (`engineering/rules/no-silent-fallback.md`).
 
-See [`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md) for client setup and a
-worked example.
+To install this into Claude Code — server registration and the
+`/review-branch` command — see
+[`integration/claude-code/README.md`](integration/claude-code/README.md).
+For what the tools are for and how to read what they return, see
+[`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md).
 
 ## Architecture
 

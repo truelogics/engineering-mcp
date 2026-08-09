@@ -91,8 +91,11 @@ The index is a snapshot. After engineering documents change:
 eng index /path/to/workspace-root
 ```
 
-Nothing detects staleness yet. A review against a stale index cites rules
-that may have been superseded — the failure is silent, which is the kind
-this organization has decided it does not accept
-(`engineering:rules/no-silent-fallback.md`). Re-indexing is currently the
-developer's job.
+Nothing detects staleness yet, and a review against a stale index cites
+rules that may since have been superseded, with nothing in the output
+saying so. Re-indexing is currently the developer's job.
+
+(An earlier draft cited `engineering:rules/no-silent-fallback.md` here.
+That rule governs Go and concerns substituting a fake when a dependency is
+missing; stretching it to cover stale data borrowed its authority for a
+case it does not make. The observation stands on its own.)

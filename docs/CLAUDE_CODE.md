@@ -10,27 +10,13 @@ last_reviewed: 2026-08-09
 
 ## Setup
 
-Build the server and register it as an MCP server:
+Installation lives in one place:
+[`integration/claude-code/README.md`](../integration/claude-code/README.md).
+It covers building the binaries, indexing a workspace, registering the
+server, and installing the `/review-branch` command.
 
-```bash
-go build -o engineering-mcp ./cmd/engineering-mcp
-
-claude mcp add engineering \
-  /absolute/path/to/engineering-mcp \
-  --workspace /absolute/path/to/your/workspace
-```
-
-The workspace must already be indexed — this server reads, it never
-indexes:
-
-```bash
-cd /path/to/your/workspace
-eng workspace create .
-eng workspace attach /path/to/engineering
-eng workspace attach /path/to/your-application
-eng index .
-eng workspace list          # confirm both repositories are attached
-```
+This document is the companion: what the tools are for and how to read
+what they return.
 
 Verify the server independently of any client before wiring it up:
 

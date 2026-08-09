@@ -197,6 +197,42 @@ func TestVerifyEvidenceReportsFailureRatherThanDropping(t *testing.T) {
 	}
 }
 
+// TestVerifyEvidenceForwardsChangedPaths pins the Sprint 11 fix. Rules
+// are selected by path scope, so verifying against an unscoped context
+// rejected verbatim quotes from rules the server had just returned —
+// a gate that fails closed on true citations teaches a reviewer to stop
+// citing.
+func TestVerifyEvidenceForwardsChangedPaths(t *testing.T) {
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/logging.md", Repository: "engineering", Snippet: "All logging goes through internal/log."},
+	}}}
+	got, err := toolNamed(t, src, "verify_evidence")(context.Background(),
+		json.RawMessage(`{"task":"logging","document":"engineering:rules/logging.md","excerpt":"goes through internal/log","changed_paths":["internal/log/log.go"]}`))
+	if err != nil {
+		t.Fatalf("verify_evidence: %v", err)
+	}
+	if len(src.gotPaths) != 1 || src.gotPaths[0] != "internal/log/log.go" {
+		t.Errorf("changed_paths = %v, want them forwarded — a scoped rule is invisible to an unscoped context", src.gotPaths)
+	}
+	if !strings.Contains(got, "VERIFIED (high confidence)") {
+		t.Errorf("output = %q, want a verification", got)
+	}
+}
+
+// TestVerifyEvidenceSaysWhenScopeIsMissing: the likeliest cause of a
+// failed verification is a caller who omitted the paths, and a failure
+// message that does not name its likeliest cause is a dead end.
+func TestVerifyEvidenceSaysWhenScopeIsMissing(t *testing.T) {
+	got, err := toolNamed(t, &fakeSource{}, "verify_evidence")(context.Background(),
+		json.RawMessage(`{"task":"logging","document":"engineering:rules/logging.md","excerpt":"anything"}`))
+	if err != nil {
+		t.Fatalf("verify_evidence: %v", err)
+	}
+	if !strings.Contains(got, "no changed_paths") {
+		t.Errorf("output = %q, want the missing scope named as a likely cause", got)
+	}
+}
+
 func TestVerifyEvidenceRequiresAllThreeArguments(t *testing.T) {
 	for _, args := range []string{
 		`{"document":"a.md","excerpt":"x"}`,

@@ -1,6 +1,11 @@
 ---
 description: Review the current branch using Engineering OS repository knowledge
 allowed-tools: Bash(git:*), Read, Glob, Grep, mcp__engineering__find_engineering_rules, mcp__engineering__get_context, mcp__engineering__search_memory, mcp__engineering__verify_evidence
+doc: RUNBOOK
+audience: [human, agent]
+status: living
+owner: engineering-mcp
+last_reviewed: 2026-08-09
 ---
 
 Review the current branch of the repository you are standing in.
@@ -40,11 +45,24 @@ general practice and justified afterwards.
   related decisions surrounding the change.
 - `search_memory(query)` — when the diff raises a specific topic (a
   dependency, a pattern, a subsystem) and you want to know what has been
-  written about it.
+  written about it. A hyphen in the query currently fails with a SQL error
+  (known kernel limitation); split hyphenated names into separate words —
+  `engineering mcp`, not `engineering-mcp`.
 
 Snippets are short — 40 to 200 characters, enough to judge relevance and not
 enough to quote. When a rule or ADR actually bears on the change, open the
 file at the `repository:path` you were given and read it.
+
+Two things to discard as you read the results:
+
+- **Your own diff.** If a changed file is indexed, it comes back as
+  "related documents", often ranked highest, because it matches the task
+  description better than anything else does. It is the thing under review,
+  not knowledge about it.
+- **The scores on rules.** Rules are selected by path scope, not by search,
+  so they usually score `0.00`. That is not a relevance judgement and does
+  not mean the rule is weak — nothing here ranks rules for you. Decide which
+  ones bear on the change by reading them.
 
 ## 3. Reason
 
@@ -53,10 +71,22 @@ For each finding: what is wrong, where (`file:line`), and why it matters here.
 - A finding that rests on a repository rule or decision must cite it as
   `repository:path`.
 - Before writing any citation, call
-  `verify_evidence(task, document, excerpt)`. If it comes back NOT VERIFIED,
-  do not publish the citation — read the file and quote it correctly, or drop
-  the claim. An unverifiable citation is worse than no citation, because it
-  looks checkable and is not.
+  `verify_evidence(task, document, excerpt, changed_paths)`. Pass the same
+  `changed_paths` you gave `find_engineering_rules`: rules are selected by
+  path scope, and without the paths a rule the server just handed you is
+  absent from the context the verifier checks against.
+- A NOT VERIFIED result does not mean the quote is wrong. The verifier
+  compares against the passage that was *retrieved*, not the file on disk,
+  and only the top-scoring passage per document is kept. A verbatim quote
+  from further down a file you have read will fail. So:
+  - If you have not read the file, treat NOT VERIFIED as a warning: open the
+    file and check the quote before using it.
+  - If you have read the file and the quote is verbatim, keep the citation
+    and mark it unverified, e.g. *(read from disk; not verifiable through
+    the tool — see the known kernel limitation)*.
+  Do not silently drop a citation you know to be true. Publishing an
+  unchecked quote and discarding a checked one are both failures; say which
+  one you are looking at.
 - Findings from general engineering practice are welcome, but label them as
   such. Do not dress general advice as organizational policy.
 - If no rule governs these files, say so plainly. That is an answer, not a

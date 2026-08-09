@@ -60,12 +60,15 @@ func verifyEvidence(src KnowledgeSource) mcp.Tool {
 			"task":     stringProp("The task whose context contains the document, e.g. 'cache permission lookups'."),
 			"document": stringProp("The document to verify against, ideally repository-qualified, e.g. 'engineering:rules/logging.md'."),
 			"excerpt":  stringProp("The exact text you intend to quote from that document."),
+			"changed_paths": stringArrayProp("The same files you passed to find_engineering_rules or get_context. " +
+				"Required to verify a quote from a rule, because rules are selected by path scope and are absent from an unscoped context."),
 		}, "task", "document", "excerpt"),
 		Handler: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
-				Task     string `json:"task"`
-				Document string `json:"document"`
-				Excerpt  string `json:"excerpt"`
+				Task         string   `json:"task"`
+				Document     string   `json:"document"`
+				Excerpt      string   `json:"excerpt"`
+				ChangedPaths []string `json:"changed_paths"`
 			}
 			if err := decode(raw, &args); err != nil {
 				return "", err
@@ -76,18 +79,28 @@ func verifyEvidence(src KnowledgeSource) mcp.Tool {
 				}
 			}
 
-			pkg, err := src.ContextFor(ctx, args.Task, memory.ContextOptions{})
+			// The same options the other tools use. Verifying against an
+			// unscoped context was a silent trap: rules are selected by
+			// path scope, so a rule find_engineering_rules had just
+			// returned was absent here, and a verbatim quote from it came
+			// back NOT VERIFIED. See docs/reports/SPRINT_11_VALIDATION.md.
+			pkg, err := src.ContextFor(ctx, args.Task, memory.ContextOptions{ChangedPaths: args.ChangedPaths})
 			if err != nil {
 				return "", err
 			}
 
 			ev, ok := pkg.VerifyEvidence(args.Document, args.Excerpt)
 			if !ok {
+				hint := ""
+				if len(args.ChangedPaths) == 0 {
+					hint = "\n\nYou passed no changed_paths. If this quote comes from an engineering rule, pass the same files you gave " +
+						"find_engineering_rules — rules are selected by path scope and are not in an unscoped context."
+				}
 				return fmt.Sprintf(
 					"NOT VERIFIED. %q does not match any text retrieved for %s.\n\n"+
 						"This means one of: the document wasn't among the context for this task, the quote isn't in the passage that was retrieved, "+
-						"or the reference is ambiguous across repositories (qualify it as 'repository:path'). Do not present this as a citation.",
-					args.Excerpt, args.Document), nil
+						"or the reference is ambiguous across repositories (qualify it as 'repository:path'). Do not present this as a citation.%s",
+					args.Excerpt, args.Document, hint), nil
 			}
 			return fmt.Sprintf("VERIFIED (%s confidence)\n\nDocument: %s\nQuote: %q",
 				ev.Confidence, ev.Qualified(), ev.Excerpt), nil
