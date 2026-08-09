@@ -44,7 +44,7 @@ func TestExposesOnlyRuleSixApprovedTools(t *testing.T) {
 	for _, tool := range All(&fakeSource{}) {
 		names = append(names, tool.Name)
 	}
-	want := []string{"search_memory", "get_context", "find_engineering_rules"}
+	want := []string{"search_memory", "get_context", "find_engineering_rules", "verify_evidence"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("tools = %v, want exactly %v — a new tool needs a validated consumer capability behind it (KERNEL_POLICY Rule #6)", names, want)
 	}
@@ -160,5 +160,51 @@ func TestFindEngineeringRulesFallsBackToPathsAsTask(t *testing.T) {
 	}
 	if src.gotTask != "a.go b.go" {
 		t.Errorf("task = %q, want the paths used for ordering when no task is given", src.gotTask)
+	}
+}
+
+func TestVerifyEvidenceConfirmsARealQuote(t *testing.T) {
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/logging.md", Repository: "engineering", Snippet: "All logging goes through internal/log."},
+	}}}
+	got, err := toolNamed(t, src, "verify_evidence")(context.Background(),
+		json.RawMessage(`{"task":"logging","document":"engineering:rules/logging.md","excerpt":"goes through internal/log"}`))
+	if err != nil {
+		t.Fatalf("verify_evidence: %v", err)
+	}
+	if !strings.Contains(got, "VERIFIED (high confidence)") {
+		t.Errorf("output = %q, want a high-confidence verification", got)
+	}
+}
+
+// TestVerifyEvidenceReportsFailureRatherThanDropping is the policy
+// difference from AI Review: a review drops an unverifiable claim
+// silently because it is finished; a model can revise, so it is told.
+func TestVerifyEvidenceReportsFailureRatherThanDropping(t *testing.T) {
+	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
+		{Path: "rules/logging.md", Repository: "engineering", Snippet: "All logging goes through internal/log."},
+	}}}
+	got, err := toolNamed(t, src, "verify_evidence")(context.Background(),
+		json.RawMessage(`{"task":"logging","document":"engineering:rules/logging.md","excerpt":"logging must be disabled in production"}`))
+	if err != nil {
+		t.Fatalf("verify_evidence: %v", err)
+	}
+	if !strings.Contains(got, "NOT VERIFIED") {
+		t.Errorf("output = %q, want an explicit non-verification", got)
+	}
+	if !strings.Contains(got, "Do not present this as a citation") {
+		t.Errorf("output = %q, want the consequence stated", got)
+	}
+}
+
+func TestVerifyEvidenceRequiresAllThreeArguments(t *testing.T) {
+	for _, args := range []string{
+		`{"document":"a.md","excerpt":"x"}`,
+		`{"task":"t","excerpt":"x"}`,
+		`{"task":"t","document":"a.md"}`,
+	} {
+		if _, err := toolNamed(t, &fakeSource{}, "verify_evidence")(context.Background(), json.RawMessage(args)); err == nil {
+			t.Errorf("args %s: want an error", args)
+		}
 	}
 }

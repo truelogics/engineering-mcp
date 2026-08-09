@@ -36,6 +36,62 @@ func All(src KnowledgeSource) []mcp.Tool {
 		searchMemory(src),
 		getContext(src),
 		findEngineeringRules(src),
+		verifyEvidence(src),
+	}
+}
+
+// verifyEvidence exposes ai-memory RFC-0006's Evidence capability,
+// promoted into the kernel precisely so this tool could exist without
+// duplicating AI Review's Validator. It is named for what it does —
+// verifying a quote a client proposes — rather than "collect_evidence",
+// which would imply the kernel searches for supporting text. It does
+// not, and no consumer has asked it to (KERNEL_POLICY Rule #5).
+//
+// Where AI Review silently drops an unverifiable claim because a review
+// is finished, this reports the failure: a model can revise, and being
+// told a quote didn't check out is the most useful answer it can get.
+func verifyEvidence(src KnowledgeSource) mcp.Tool {
+	return mcp.Tool{
+		Name: "verify_evidence",
+		Description: "Check that a quote you are about to attribute to an engineering document really appears in it. " +
+			"Use before writing 'per ADR-0003, ...' or citing a rule, so the citation is checkable rather than asserted. " +
+			"Returns the verified quote with a confidence grade, or tells you the quote could not be verified.",
+		InputSchema: object(map[string]any{
+			"task":     stringProp("The task whose context contains the document, e.g. 'cache permission lookups'."),
+			"document": stringProp("The document to verify against, ideally repository-qualified, e.g. 'engineering:rules/logging.md'."),
+			"excerpt":  stringProp("The exact text you intend to quote from that document."),
+		}, "task", "document", "excerpt"),
+		Handler: func(ctx context.Context, raw json.RawMessage) (string, error) {
+			var args struct {
+				Task     string `json:"task"`
+				Document string `json:"document"`
+				Excerpt  string `json:"excerpt"`
+			}
+			if err := decode(raw, &args); err != nil {
+				return "", err
+			}
+			for name, v := range map[string]string{"task": args.Task, "document": args.Document, "excerpt": args.Excerpt} {
+				if strings.TrimSpace(v) == "" {
+					return "", fmt.Errorf("%s is required", name)
+				}
+			}
+
+			pkg, err := src.ContextFor(ctx, args.Task, memory.ContextOptions{})
+			if err != nil {
+				return "", err
+			}
+
+			ev, ok := pkg.VerifyEvidence(args.Document, args.Excerpt)
+			if !ok {
+				return fmt.Sprintf(
+					"NOT VERIFIED. %q does not match any text retrieved for %s.\n\n"+
+						"This means one of: the document wasn't among the context for this task, the quote isn't in the passage that was retrieved, "+
+						"or the reference is ambiguous across repositories (qualify it as 'repository:path'). Do not present this as a citation.",
+					args.Excerpt, args.Document), nil
+			}
+			return fmt.Sprintf("VERIFIED (%s confidence)\n\nDocument: %s\nQuote: %q",
+				ev.Confidence, ev.Qualified(), ev.Excerpt), nil
+		},
 	}
 }
 
