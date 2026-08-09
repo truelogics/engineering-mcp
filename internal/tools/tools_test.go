@@ -150,6 +150,12 @@ func TestFindEngineeringRulesSaysSoWhenNoneApply(t *testing.T) {
 	if !strings.Contains(got, "No engineering rule governs") {
 		t.Errorf("output should state plainly that no rule applies:\n%s", got)
 	}
+	// Sprint 11: a workspace holding no rules at all returned this same
+	// confident sentence. The two cases are indistinguishable to a
+	// reader, so the message has to name the second one.
+	if !strings.Contains(got, "eng workspace list") {
+		t.Errorf("output must say how to check that a rulebook was actually consulted:\n%s", got)
+	}
 }
 
 func TestFindEngineeringRulesFallsBackToPathsAsTask(t *testing.T) {

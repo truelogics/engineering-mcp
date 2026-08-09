@@ -214,7 +214,15 @@ func findEngineeringRules(src KnowledgeSource) mcp.Tool {
 				return "", err
 			}
 			if len(pkg.Rules) == 0 {
-				return fmt.Sprintf("No engineering rule governs %s.\n\nThat is an answer, not an omission: no rule in this organization's rulebook declares it applies to these files.",
+				// The second paragraph is not padding. This exact message
+				// was returned confidently by a workspace holding zero
+				// rules, which reads identically to a rulebook that was
+				// consulted and had nothing to say
+				// (engineering:rules/no-silent-fallback.md).
+				return fmt.Sprintf("No engineering rule governs %s.\n\n"+
+					"That is an answer, not an omission: no indexed rule declares it applies to these files.\n\n"+
+					"If that is surprising, check which workspace answered — `eng workspace list`. A workspace holding only "+
+					"your application has no rulebook to consult, and its answer looks exactly like this one.",
 					strings.Join(args.ChangedPaths, ", ")), nil
 			}
 
