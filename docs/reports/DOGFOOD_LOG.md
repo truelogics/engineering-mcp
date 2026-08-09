@@ -507,3 +507,118 @@ eng init  →  teach the repository to describe itself  →  eng index
 That middle step is the first genuine onboarding problem the project has
 found, and it was invisible until Engineering OS was pointed at something
 it had not been built alongside.
+
+---
+
+# Validation Phase 1
+
+Usage is now the source of the roadmap. `engineering/KERNEL_POLICY.md`
+Rule #8 makes it binding: a capability must name the entry below that
+exposed the need for it, or the work does not start.
+
+## Run 6 — ai-memory / sprint-11-fts-hyphen-fix (the taxonomy branch)
+
+| | |
+|---|---|
+| Repository | `ai-memory` |
+| Task | Review the RFC-0007 taxonomy work before merging it |
+| Workspace | `…/truelogics` (walk-up) |
+| MCP tools called | **0** |
+| Other tools | Skill ×1, Bash ×36 |
+| Turns / wall / cost | 39 / 365s / $2.55 |
+| Outcome | **Complete.** One blocking finding, three should-fix |
+
+### Useful findings — three real, one blocking
+
+**Blocking, and it invalidated my own verification.** Adding a
+`.engineering.yaml` changes no markdown file's bytes, so the
+content-hash short-circuit reported every existing document `Unchanged`
+and left it `unknown`. RFC-0007 worked on a fresh index and did nothing
+on an already-indexed repository — the only path that matters, since the
+repositories needing a taxonomy are the ones already indexed without one.
+
+My Sprint 13 verification had missed it because it began with
+`rm -rf .eng`. The review did not take the tests' word for it; it ran the
+real pipeline twice and showed the second run reporting `Unchanged:1`
+with the type still `unknown`. Reproduced by hand before fixing.
+
+**A malformed taxonomy in one repository aborted the whole workspace**,
+leaving every repository after it in the list stale with nothing on
+screen to say so. A new error class the change had introduced: `Index`
+used to fail only on collector and storage faults, never on a
+user-authored file inside a foreign repository.
+
+**`pkg/memory.IndexResult` never received the `Failures` field** the CLI
+gained in Sprint 12, so `engineering-mcp` — the one SDK consumer — still
+reported `1 errors` with no file and no cause. The Sprint 12 fix had
+landed for the CLI and quietly not for the SDK.
+
+All three fixed pre-merge. This is the daily workflow working exactly as
+specified: implement, review, improve, commit.
+
+### Incorrect findings
+
+None. One finding was correct but immaterial here — `git check-ignore`
+C-quotes non-ASCII paths without `-z`, so ignored files with such names
+are never dropped. It fails open, and no repository in this workspace has
+one. Recorded, unfixed.
+
+### Missing knowledge, taxonomy, rules
+
+None identified. Every finding came from the code and the RFC.
+
+### Friction — and the observation that now clears the improvement rule
+
+**Zero MCP calls, again.** The reviewer loaded `review-pull-requests` —
+a skill belonging to another project's ecosystem — inside Engineering
+OS's own repository, and never called the platform.
+
+Third sighting, third repository:
+
+| | repository | competing skill | outcome |
+|---|---|---|---|
+| Sprint 11 Run 0 | engineering-mcp | `code-review` | retrieval suppressed; would have helped |
+| Sprint 12 Run 5 | pivot | `review-pivot` + 3 others | retrieval suppressed; losing was correct |
+| Phase 1 Run 6 | ai-memory | `review-pull-requests` | retrieval suppressed; unclear |
+
+That clears the improvement rule twice over — repeated, and across
+multiple repositories — and arguably a third time, since Validation Phase
+1's primary goal is that Engineering MCP provides knowledge
+*automatically*, which cannot happen if the skill never fires.
+
+The cause is not architectural. It is the descriptions:
+
+```
+review-pull-requests: "...review a PR, inspect a diff, check changes
+                       before merge, pre-merge or adversarial review,
+                       find bugs before bots..."
+review-branch:        "Review the current branch using Engineering OS
+                       repository knowledge"
+```
+
+Theirs enumerates the phrases a developer actually says. Ours states what
+it uses, which is a fact about the implementation rather than the
+request.
+
+**Not fixed, deliberately, and this is the open question.** In Run 5
+losing was the *right* outcome — those domain skills were better, and a
+description tuned to win everywhere would have made that review worse.
+The narrow fix is to become discoverable for "review my branch before
+commit" without trying to outrank purpose-built domain reviewers. Whether
+that distinction can be expressed in a description at all is genuinely
+unclear, which is why this is logged rather than patched.
+
+### Latency and cost
+
+365s, $2.55. Against Sprint 11's completed runs (240–285s, $1.50–1.56)
+and Run 5 (465s, $3.13). The trend is upward and tracks diff size rather
+than anything the platform controls.
+
+### The thing worth noticing
+
+This review found a blocking defect in a feature shipped four hours
+earlier, whose author had verified it and believed it worked. The
+verification was wrong in a way that only shows up on the upgrade path,
+and the review found that path without being told to look for it.
+
+It did so while calling Engineering OS zero times.
