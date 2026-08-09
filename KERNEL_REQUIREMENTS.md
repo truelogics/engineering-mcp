@@ -90,7 +90,37 @@ source content, not against one retrieved highlight. `ai-review`'s #14 and
 difference between "unchecked" and "checked but unverifiable" and forbids
 silently dropping the latter, which is a disclosure, not a substitute.
 
-## 3. The `doc:` taxonomy is closed, so most organizational documents are unclassifiable
+## 3. ~~The `doc:` taxonomy is closed, so most organizational documents are unclassifiable~~ — RESOLVED (Sprint 13, ai-memory RFC-0007)
+
+A repository now states what its own directories hold, in a
+`.engineering.yaml` that lives in the repository and maps path globs onto
+a small closed set of canonical types. The vocabulary the platform
+reasons over stays ours and stays small; the names a company gives its
+directories stay theirs and stay open.
+
+Measured on the project below, after four lines of mapping:
+
+| | before | after |
+|---|---|---|
+| unknown | 662 (91%) | 177 (25%) |
+| decisions (`adr`) | 0 | 153 |
+| guides | 0 | 66 |
+| planning | 0 | 260 |
+
+`plans/to-do/block-fractional-indexing-vorder-v2.md` — the document whose
+absence from retrieval is the whole reason this requirement existed — now
+classifies as a decision and comes back from `get_context` under
+Architecture decision records at 0.80, with the exact passage the reviewer
+used ranked second.
+
+This organization's own 101 documents classify identically, document for
+document, because a mapping only ever fills in `unknown` and never
+overrules a document's own front matter.
+
+The original text is kept below: the shape of the miss is the useful
+part, and the numbers are the evidence the RFC was written against.
+
+### The original requirement
 
 `engineering:rules/doc-front-matter.md` requires every markdown document to
 declare what it is, and states the consequence of not doing so: an

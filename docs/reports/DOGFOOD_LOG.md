@@ -399,3 +399,111 @@ Isolated incidents, recorded and left alone per the improvement policy:
 the `pending` MCP status seen once at init in `pivot` (a startup-timing
 artifact — the server answered correctly when driven directly), and the
 transport errors that killed two of four Sprint 11 runs.
+
+---
+
+# Sprint 13 — Repository Taxonomy (ai-memory RFC-0007)
+
+Run 5's conclusion named the problem precisely enough to fix: retrieval
+worked, and the kernel could not say what the retrieved document *was*.
+This is the result of acting on it.
+
+## What changed
+
+A repository states what its own directories hold, in a
+`.engineering.yaml` that lives in the repository:
+
+```yaml
+taxonomy:
+  plans/**:          Decision
+  plans/backlog/**:  Planning
+  handbook/**:       Guide
+```
+
+The vocabulary the platform reasons over stays ours and stays small —
+eight canonical types. The names a company gives its directories stay
+theirs and stay open. Patterns reuse RFC-0005's `applies_to` globs, and
+the longest match wins.
+
+The safety property is precedence: a mapping applies **only** to
+documents that would otherwise be `unknown`. Front matter is what a
+document says about itself; a taxonomy is what a repository says about a
+directory; the specific claim wins.
+
+## Measured on pivot, with the four lines above
+
+| | before | after |
+|---|---|---|
+| unknown | 662 (91%) | 177 (25%) |
+| `adr` (Decision) | 0 | 153 |
+| roadmap (Planning) | 0 | 260 |
+| guide | 0 | 66 |
+| readme | 64 | 64 |
+
+And the specific document that made the case:
+
+```
+plans/to-do/block-fractional-indexing-vorder-v2.md | unknown  →  adr
+```
+
+`get_context`, for a change to the block ordering code, now returns:
+
+```
+## Architecture decision records
+- pivot:plans/to-do/block-fractional-indexing-vorder-v2.md (score 0.80)
+- pivot:plans/to-do/block-fractional-indexing-vorder-v2.md (score 0.76)
+    ...Backfill input sort (`block_data`): N/A — `block_data`...
+```
+
+The passage ranked second is the one the Run 5 reviewer actually used for
+its blocking finding, reached there by `grep`. It is now the second-ranked
+decision for that change, retrieved.
+
+## The regression check that mattered more than the improvement
+
+A taxonomy change that quietly reclassified existing documents would look
+identical to a regression in every consumer that groups by type. So the
+acceptance criterion was a document-for-document comparison of this
+organization's own workspace, before and after:
+
+```
+101 documents, 1 line of difference — rfcs/0007-repository-taxonomy.md,
+the RFC written for this change, correctly classified as an rfc.
+```
+
+Nothing moved, because nothing *could* move: `unknown` is the only
+eligible input.
+
+## New friction, recorded not fixed
+
+**One document can occupy a whole section.** Seven of the nine entries in
+that Architecture-decision-records section are chunks of the same file.
+Useful here — the passages differ and two of them matter — but a section
+that can be monopolised by one document will crowd out a second relevant
+decision. Second sighting of chunk-level duplication (Sprint 11 Run 3 saw
+the same file at 0.80 and 0.44). Not yet costly enough to act on.
+
+**A taxonomy is a judgement, and I made it.** `plans/** → Decision` is my
+reading of that repository, written by someone who does not work on it.
+It happens to be right about the file that mattered. The onboarding flow
+this implies — a stranger guessing at directory meanings — is worse than
+the repository's own team writing four lines, and the design assumes the
+team writes them.
+
+## The onboarding flow this changes
+
+Before:
+
+```
+eng init  →  eng index
+```
+
+Now:
+
+```
+eng init  →  teach the repository to describe itself  →  eng index
+```
+
+That middle step is the first genuine onboarding problem the project has
+found, and it was invisible until Engineering OS was pointed at something
+it had not been built alongside.

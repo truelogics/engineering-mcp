@@ -30,7 +30,41 @@ go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp   # this repo
 go build -o ~/.local/bin/eng ../ai-memory/cmd/eng                # the kernel CLI
 ```
 
-**2. Index a workspace.**
+**2. Teach the repository to describe itself.**
+
+Skip this on a repository that already uses `doc:` front matter
+everywhere. On any other — which is every repository on its first day —
+it is the difference between a working tool and an empty rulebook.
+
+Write `.engineering.yaml` at the repository root, mapping your
+directories onto the canonical types Engineering OS reasons over:
+
+```yaml
+taxonomy:
+  plans/**:      Decision
+  handbook/**:   Guide
+  product/**:    Specification
+  research/**:   Reference
+```
+
+Canonical types: `Rule`, `Decision`, `Architecture`, `Specification`,
+`Guide`, `Planning`, `Reference`, `Other`. Patterns use the same glob
+syntax as a rule's `applies_to`, and the longest matching pattern wins,
+so `plans/backlog/**` can say something different from `plans/**`.
+
+A document's own front matter always wins over this file. These lines
+only classify documents that would otherwise be unclassified — so adding
+a taxonomy can never change how an already-classified document is
+retrieved.
+
+Why this step exists: on the first repository outside this organization,
+91% of documents were unclassified, and a review's blocking finding
+rested on a planning document that retrieval could only ever return as
+one keyword hit among 662 siblings. Four lines of mapping took unknown
+from 662 to 177 and put that document at the top of the decisions
+section. See `docs/reports/DOGFOOD_LOG.md`.
+
+**3. Index a workspace.**
 
 A workspace is an indexing boundary, not a repository. It should hold the
 repository you are working in *and* the repository holding your
@@ -55,7 +89,7 @@ Attach only repositories whose documents are true statements about the
 organization. Benchmark fixtures and example projects contain plausible
 ADRs that were never decided, and a review cannot tell them from real ones.
 
-**3. Register the server once, for every project.**
+**4. Register the server once, for every project.**
 
 ```bash
 claude mcp add engineering --scope user \
@@ -79,7 +113,7 @@ Project scope works too, if you would rather commit the configuration:
 copy `mcp.json.example` to `.mcp.json` at your project root. Claude Code
 asks you to approve it the first time you start a session there.
 
-**4. Install the command.**
+**5. Install the command.**
 
 ```bash
 cp review-branch.md ~/.claude/commands/      # every project
