@@ -217,8 +217,10 @@ func TestUnregisteredServerFailsWithTheCommandToRun(t *testing.T) {
 	if c.Status != StatusFail {
 		t.Errorf("status = %q, want fail", c.Status)
 	}
-	if !strings.Contains(c.Fix, "claude mcp add engineering") || !strings.Contains(c.Fix, env.Self) {
-		t.Errorf("the fix should be the exact command, with this binary's path: %q", c.Fix)
+	// One runnable command naming this binary, not a `claude mcp add`
+	// invocation with two absolute paths the developer has to supply.
+	if !strings.Contains(c.Fix, env.Self+" install") {
+		t.Errorf("the fix should be this binary's own install command: %q", c.Fix)
 	}
 	// The CLI fails for reasons other than an unregistered server, so its
 	// own message is reported rather than a guess at what it meant.

@@ -8,9 +8,9 @@ last_reviewed: 2026-08-10
 
 # Onboarding a repository
 
-[`INSTALL.md`](INSTALL.md) is a per-machine job you do once. This is the
-per-repository one, and you do it for every repository you want reviews
-to understand.
+Installing ([`QUICKSTART.md`](QUICKSTART.md)) is a per-machine job you do
+once. This is the per-repository one, and you do it for every repository
+you want reviews to understand.
 
 It takes a few minutes. Most of that is one decision only you can make.
 

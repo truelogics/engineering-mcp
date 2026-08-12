@@ -14,6 +14,7 @@ import (
 
 	"github.com/truelogics/engineering-kernel/pkg/memory"
 	"github.com/truelogics/engineering-mcp/internal/doctor"
+	"github.com/truelogics/engineering-mcp/internal/install"
 	"github.com/truelogics/engineering-mcp/internal/mcp"
 	"github.com/truelogics/engineering-mcp/internal/tools"
 	"github.com/truelogics/engineering-mcp/internal/workspace"
@@ -25,12 +26,13 @@ const (
 )
 
 func main() {
-	// `doctor` is consumed before flag parsing so it can carry the same
-	// flags the server takes, and so an unrecognised subcommand still
-	// reaches flag's own error handling rather than being swallowed here.
+	// Subcommands are consumed before flag parsing so they can carry the
+	// same flags the server takes, and so an unrecognised subcommand
+	// still reaches flag's own error handling rather than being
+	// swallowed here.
 	args := os.Args[1:]
 	subcommand := ""
-	if len(args) > 0 && args[0] == "doctor" {
+	if len(args) > 0 && (args[0] == "doctor" || args[0] == "install") {
 		subcommand, args = args[0], args[1:]
 	}
 
@@ -40,6 +42,7 @@ func main() {
 	workspaceFlag := fs.String("workspace", "",
 		"path to the indexed Engineering Kernel workspace (default: the workspace containing the working directory, then $"+workspace.EnvVar+")")
 	showVersion := fs.Bool("version", false, "print version and exit")
+	force := fs.Bool("force", false, "install: overwrite an existing /review-branch command")
 	fs.Usage = usage(fs)
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
@@ -57,8 +60,14 @@ func main() {
 	// The subcommand outranks --version. The other order made
 	// `engineering-mcp doctor --version` print a version string and never
 	// run the diagnostic it was asked for.
-	if subcommand == "doctor" {
+	switch subcommand {
+	case "doctor":
 		if !runDoctor(*workspaceFlag) {
+			os.Exit(1)
+		}
+		return
+	case "install":
+		if !runInstall(*workspaceFlag, *force) {
 			os.Exit(1)
 		}
 		return
@@ -83,11 +92,14 @@ func usage(fs *flag.FlagSet) func() {
 
 Usage:
   %s [--workspace <dir>]    serve MCP over stdin/stdout (what Claude Code runs)
+  %s install                register with Claude Code and install /review-branch
   %s doctor                 check whether this machine is set up correctly
   %s --version
 
+`+"`eng setup`"+` runs install for you, along with everything before it.
+
 Flags:
-`, serverName, serverName, serverName, serverName)
+`, serverName, serverName, serverName, serverName, serverName)
 		fs.PrintDefaults()
 	}
 }
@@ -95,29 +107,61 @@ Flags:
 // runDoctor reports to stdout, unlike the server, which must keep stdout
 // clear for JSON-RPC. Nobody is speaking a protocol to doctor.
 func runDoctor(workspaceFlag string) bool {
+	cwd, self, ok := location(false)
+	if !ok {
+		return false
+	}
+	ctx := context.Background()
+	env := doctor.System(self, cwd, workspaceFlag)
+	return doctor.Report(os.Stdout, doctor.Run(ctx, env))
+}
+
+// runInstall registers this binary with Claude Code and installs the
+// /review-branch command. Reported to stdout for the same reason as
+// doctor.
+func runInstall(workspaceFlag string, force bool) bool {
+	// Fatal here, unlike in doctor. Doctor's own path being unknown
+	// makes three checks unreliable; install's own path being unknown
+	// makes it write a registration pointing at the string
+	// "engineering-mcp", which Claude Code resolves against whatever is
+	// on $PATH at session start — a plausible-looking entry that launches
+	// something other than what was installed.
+	cwd, self, ok := location(true)
+	if !ok {
+		return false
+	}
+	ctx := context.Background()
+	env := install.System(self, cwd, workspaceFlag)
+	return install.Report(os.Stdout, install.Run(ctx, env, force))
+}
+
+// location returns the working directory and this binary's own path.
+//
+// When the executable path cannot be determined and fatal is false, the
+// bare command name is substituted and the substitution is announced.
+// Doing it silently made three of doctor's checks compare a real path
+// against it and report "two builds are installed" and "Claude Code
+// launches X, not engineering-mcp" — the shape
+// engineering:rules/no-silent-fallback.md exists to prevent, where the
+// output of a substitution is indistinguishable from the real thing.
+func location(fatal bool) (cwd, self string, ok bool) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, serverName+":", err)
-		return false
+		return "", "", false
 	}
-	self, err := os.Executable()
+	self, err = os.Executable()
 	if err != nil {
-		// Not fatal — the rest of the checks are still worth running —
-		// but said out loud. Substituting the bare name silently made
-		// three checks compare a real path against it and report "two
-		// builds are installed" and "Claude Code launches X, not
-		// engineering-mcp", which is the shape
-		// engineering:rules/no-silent-fallback.md exists to prevent: a
-		// substitution whose output is indistinguishable from the real
-		// thing.
+		if fatal {
+			fmt.Fprintf(os.Stderr, "%s: could not determine this binary's own path (%v),\n"+
+				"and a registration must name it absolutely. Nothing was changed.\n", serverName, err)
+			return "", "", false
+		}
 		fmt.Fprintf(os.Stderr, "%s: could not determine this binary's own path (%v).\n"+
 			"Checks that compare installed binaries are unreliable in this run.\n\n", serverName, err)
 		self = serverName
 	}
-
-	ctx := context.Background()
-	env := doctor.System(self, cwd, workspaceFlag)
-	return doctor.Report(os.Stdout, doctor.Run(ctx, env))
+	return cwd, self, true
 }
 
 func run(workspaceFlag string) error {

@@ -156,7 +156,7 @@ func checkServerBinary(env Env) Check {
 			Name:   "Engineering MCP",
 			Status: StatusWarn,
 			Detail: fmt.Sprintf("running %s, but %q is not on $PATH", env.Self, name),
-			Fix:    fmt.Sprintf("install it where Claude Code can find it:\n    go build -o ~/.local/bin/%s ./cmd/%s", name, name),
+			Fix:    fmt.Sprintf("install it where Claude Code can find it:\n    go install github.com/truelogics/engineering-mcp/cmd/%s@latest", name),
 		}
 	}
 
@@ -182,7 +182,7 @@ func checkEngCLI(ctx context.Context, env Env) Check {
 			Name:   "Engineering Kernel (eng)",
 			Status: StatusFail,
 			Detail: "not on $PATH — nothing can be indexed without it",
-			Fix:    "go build -o ~/.local/bin/eng ../engineering-kernel/cmd/eng",
+			Fix:    "go install github.com/truelogics/engineering-kernel/cmd/eng@latest",
 		}
 	}
 
@@ -192,7 +192,7 @@ func checkEngCLI(ctx context.Context, env Env) Check {
 			Name:   "Engineering Kernel (eng)",
 			Status: StatusFail,
 			Detail: fmt.Sprintf("%s could not be run: %v\n%s", path, err, indent(out)),
-			Fix:    "rebuild it: go build -o ~/.local/bin/eng ../engineering-kernel/cmd/eng",
+			Fix:    "reinstall it: go install github.com/truelogics/engineering-kernel/cmd/eng@latest",
 		}
 	}
 	return Check{Name: "Engineering Kernel (eng)", Status: StatusOK, Detail: fmt.Sprintf("%s (%s)", firstLine(out), path)}
@@ -373,9 +373,13 @@ func checkClaudeCode(env Env, reg registration) Check {
 			Name:   name,
 			Status: StatusFail,
 			Detail: trimBlank(reg.Raw),
-			Fix: "claude mcp add engineering --scope user \\\n" +
-				"      -e " + EnvAssignmentPrefix + "/path/to/your/workspace-root \\\n" +
-				"      -- " + env.Self,
+			// One command rather than the three-line `claude mcp add`
+			// invocation this used to print, whose two absolute paths a
+			// developer had to supply from memory. `install` derives
+			// both. Spelled as this binary's own path rather than as a
+			// bare name, because the check above it is the one that
+			// establishes whether the bare name resolves here at all.
+			Fix: env.Self + " install",
 		}
 	}
 
@@ -392,7 +396,7 @@ func checkClaudeCode(env Env, reg registration) Check {
 			Name:   name,
 			Status: StatusWarn,
 			Detail: fmt.Sprintf("Claude Code launches %s, not %s", reg.Command, env.Self),
-			Fix:    "re-register, or rebuild over the registered path — otherwise your changes never reach Claude Code.",
+			Fix:    env.Self + " install     # repoints Claude Code at this binary",
 		}
 	}
 	// The trailing "To remove this server, run: ..." hint is help for a
@@ -455,7 +459,7 @@ func checkReviewCommand(env Env) Check {
 		Name:   name,
 		Status: StatusWarn,
 		Detail: "not installed — on a machine with several MCP servers, tool schemas are deferred and these tools are never reached without it",
-		Fix:    "cp integration/claude-code/review-branch.md ~/.claude/commands/",
+		Fix:    "engineering-mcp install     # writes it from the copy embedded in this binary",
 	}
 }
 

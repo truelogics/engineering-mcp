@@ -3,15 +3,15 @@ doc: RUNBOOK
 audience: [human]
 status: living
 owner: engineering-mcp
-last_reviewed: 2026-08-10
+last_reviewed: 2026-08-12
 ---
 
 # Installing Engineering OS
 
 This is the long version, with what each step produces and what goes
-wrong. If you want the ten-line version, read
-[`QUICKSTART.md`](QUICKSTART.md) instead and come back here when
-something fails.
+wrong. If you just want it working, read
+[`QUICKSTART.md`](QUICKSTART.md) — three commands — and come back here
+when something fails.
 
 Installation is per-machine and happens once. Making a *repository*
 Engineering OS aware is a separate, per-repository job —
@@ -23,7 +23,7 @@ Two binaries and one index.
 
 | | What it is | Who runs it |
 |---|---|---|
-| `eng` | the Engineering Kernel CLI: builds and maintains the index | you |
+| `eng` | the Engineering Kernel CLI: builds and maintains the index, and installs the rest | you |
 | `engineering-mcp` | serves that index to an MCP client over stdio | Claude Code |
 | `.eng/memory.db` | the index itself, one per workspace | neither; it is data |
 
@@ -49,14 +49,63 @@ speaks plain MCP and does not otherwise care.
 The first build downloads dependencies and can take a few minutes.
 Subsequent builds are seconds.
 
-## 1. Clone
+## The short version
+
+```bash
+go install github.com/truelogics/engineering-kernel/cmd/eng@latest
+export PATH="$(go env GOPATH)/bin:$PATH"        # in your shell profile
+
+eng setup ~/engineering-os \
+  --rules git@github.com:truelogics/engineering.git \
+  --repo  ~/code/your-application
+```
+
+The rest of this document is what that does, and how to do each part by
+hand when it does not work.
+
+## 1. Get the binaries
+
+```bash
+go install github.com/truelogics/engineering-kernel/cmd/eng@latest
+go install github.com/truelogics/engineering-mcp/cmd/engineering-mcp@latest
+```
+
+`eng setup` runs the second one for you if `engineering-mcp` is not
+already on `$PATH`, so you rarely type it.
+
+Both land in `$(go env GOPATH)/bin` — usually `~/go/bin` — which is not
+on `$PATH` by default. Put it there in your shell profile rather than
+just this session:
+
+```bash
+export PATH="$(go env GOPATH)/bin:$PATH"
+```
+
+Check both:
+
+```bash
+eng version                 # eng version v0.3.0
+engineering-mcp --version   # engineering-mcp 0.1.0-alpha
+```
+
+Installing somewhere on `$PATH` is not cosmetic. Claude Code launches the
+server by absolute path, and if you later rebuild to a *different*
+location you end up with two binaries and a session that keeps running
+the older one. `eng doctor` checks for exactly this and says so.
+
+### Building from a clone instead
+
+If you are going to change the code, clone and build:
 
 ```bash
 mkdir -p ~/engineering-os && cd ~/engineering-os
-
 git clone git@github.com:truelogics/engineering-kernel.git
 git clone git@github.com:truelogics/engineering-mcp.git
-git clone git@github.com:truelogics/engineering.git
+
+mkdir -p ~/.local/bin
+(cd engineering-kernel && go build -o ~/.local/bin/eng ./cmd/eng)
+(cd engineering-mcp    && go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp)
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 The directory names no longer matter, and for a while they did.
@@ -77,118 +126,100 @@ cd ~/engineering-os && go work init ./engineering-kernel ./engineering-mcp
 Do not commit it to either repository — it belongs to your machine, and
 committing it would reimpose the layout requirement it exists to remove.
 
-The third repository is your **rulebook**: whichever repository holds your
-organization's engineering rules, ADRs and standards. For this
-organization that is `engineering`. For yours it may be a `docs` repo, a
-handbook, or a directory inside your main application. It does not need to
-be a separate repository; it needs to exist.
+After rebuilding, run `engineering-mcp install` so Claude Code launches
+the build you just made rather than the one it was registered with.
 
-## 2. Build both binaries
+## 2. `eng setup`
 
 ```bash
-mkdir -p ~/.local/bin
-(cd ~/engineering-os/engineering-kernel       && go build -o ~/.local/bin/eng ./cmd/eng)
-(cd ~/engineering-os/engineering-mcp && go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp)
+eng setup ~/engineering-os \
+  --rules git@github.com:truelogics/engineering.git \
+  --repo  ~/code/your-application
 ```
 
-Then put that directory on your `PATH`, in your shell profile rather than
-just this session:
+Four steps, reported as it goes.
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
+**[1/4] Workspace.** A workspace is an indexing boundary — one
+`.eng/memory.db` over one or more repositories. It is not a repository,
+and usually should not be one. The useful shape is a directory that
+*contains* the repositories you want indexed together.
 
-Check both:
-
-```bash
-eng version                 # eng version v0.3.0
-engineering-mcp --version   # engineering-mcp 0.1.0-alpha
-```
-
-Installing somewhere on `PATH` is not cosmetic. Claude Code launches the
-server by absolute path, and if you later rebuild to a *different*
-location you end up with two binaries and a session that keeps running the
-older one. `eng doctor` checks for exactly this and says so.
-
-## 3. Create a workspace
-
-A **workspace** is an indexing boundary — one `.eng/memory.db` over one or
-more repositories. It is not a repository, and usually should not be one.
-
-The useful shape is a directory that *contains* the repositories you want
-indexed together:
-
-```bash
-cd ~/engineering-os
-eng workspace create .
-eng workspace detach .
-eng workspace attach ./engineering
-eng workspace attach /path/to/your-application
-eng workspace list
-```
-
-Two steps deserve explanation.
-
-**Why `detach .` immediately after `create .`** — `create` registers its
-own directory as a repository, which is right when the workspace *is* a
-single repository and wrong when it is a parent of several. Left attached,
-every document in every child repository is indexed twice: once under its
-own repository and once under the root's. Citations then read
+`setup` creates it, and then detaches the root from its own index when
+the root is not itself a git repository. That step used to be a manual
+`eng workspace detach .` immediately after `create`, and everybody
+skipped it, because nothing on screen said why it was there. Left
+attached, every document in every child repository is indexed twice: once
+under its own repository and once under the root's. Citations then read
 `engineering-os:rules/logging.md` for a file that belongs to
-`engineering`, and two repositories become indistinguishable. Detaching is
-how you say "this directory is a container".
+`engineering`, and two repositories become indistinguishable.
 
-**Why `attach` and not `index`** — `attach` indexes the repository as it
-attaches it. There is no separate index step during setup. `eng index .`
-is the *refresh* command, for later.
+If you point `setup` at a directory that *is* a git repository, it stays
+attached — that is the single-repository workspace, and detaching there
+would leave an index of nothing.
 
-`eng init` is an alias for `eng workspace create`. Same command, two
-names; older documents use the other one.
+**[2/4] Repositories.** Each `--rules` and `--repo` is cloned if it is a
+git URL, then attached and indexed. `attach` indexes as it goes; there is
+no separate index step during setup. `eng index` is the *refresh*
+command, for later.
 
-### What to attach
+One bad path does not stop the others: it is reported, the rest are
+attached, and `setup` exits non-zero at the end naming what failed.
 
-Attach the rulebook and the code you actually work on.
+**What to attach.** The rulebook and the code you actually work on. Do
+not attach benchmark fixtures, example projects, or scratch repositories.
+They contain plausible ADRs that were never decided and rules nobody
+agreed to, and retrieval cannot tell them from the real thing.
 
-Do not attach benchmark fixtures, example projects, or scratch
-repositories. They contain plausible ADRs that were never decided and
-rules nobody agreed to, and retrieval cannot tell them from the real
-thing.
+**[3/4] `engineering-mcp`.** Installed with `go install` if it is not
+already on `$PATH`. If the install succeeds and the binary still is not
+found, `$(go env GOPATH)/bin` is not on your `$PATH` — `setup` says so
+and names the directory, because "command not found" immediately after a
+successful install is otherwise unreadable.
 
-## 4. Register the server with Claude Code
+**[4/4] Claude Code.** `setup` hands over to `engineering-mcp install`,
+which is the component that owns this. See the next section.
 
-Once, at user scope, for every project on the machine:
+## 3. What `engineering-mcp install` does
+
+You can run it on its own — after rebuilding, or if you skipped `setup`:
+
+```bash
+engineering-mcp install [--workspace <dir>] [--force]
+```
+
+**Registers the server**, once, at user scope, for every project on the
+machine — the equivalent of:
 
 ```bash
 claude mcp add engineering --scope user \
   -e ENGINEERING_WORKSPACE="$HOME/engineering-os" \
-  -- "$HOME/.local/bin/engineering-mcp"
+  -- "$HOME/go/bin/engineering-mcp"
 ```
 
-Note there is no `--workspace` argument. The server resolves one at every
-start, in order of how specific the instruction was:
+Two absolute paths, neither of which anyone has to hand, which is why
+this is a command. It removes any existing registration first: `claude
+mcp add` refuses a name that already exists, so without that, the command
+whose whole job is to repoint a stale installation would fail on every
+machine that had one.
+
+Note there is no `--workspace` argument in the registration. The server
+resolves one at every start, in order of how specific the instruction
+was:
 
 1. an explicit `--workspace`, if you pass one;
-2. the nearest indexed workspace at or above the directory Claude Code was
-   started in — so a project with its own `.eng/` serves its own knowledge;
+2. the nearest indexed workspace at or above the directory Claude Code
+   was started in — so a project with its own `.eng/` serves its own
+   knowledge;
 3. `$ENGINEERING_WORKSPACE`, so the rulebook follows you into projects
    that are not themselves indexed.
 
 It prints which workspace it chose, and why, to stderr.
 
-Project scope works too if you would rather commit the configuration: copy
-[`integration/claude-code/mcp.json.example`](integration/claude-code/mcp.json.example)
-to `.mcp.json` at your project root. Claude Code asks you to approve it the
-first time you open a session there.
-
-## 5. Install the `/review-branch` command
-
-```bash
-mkdir -p ~/.claude/commands
-cp ~/engineering-os/engineering-mcp/integration/claude-code/review-branch.md ~/.claude/commands/
-```
-
-`~/.claude/commands/` does not exist on a fresh machine, hence the
-`mkdir`.
+**Installs the `/review-branch` command** into
+`~/.claude/commands/review-branch.md`, from a copy embedded in the
+binary — so this works from a `go install` with no clone to copy out of.
+An existing file that differs is left alone and reported, on the
+assumption that you edited it; `--force` overwrites.
 
 This step reads like a convenience and is not one. On a machine with
 several MCP servers installed, Claude Code defers tool schemas: the tool
@@ -201,7 +232,19 @@ command available, and 0 times out of 42 without it
 Installing it is necessary and not sufficient — see
 [`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md) on invoking it by name.
 
-## 6. Verify
+**If Claude Code is not installed**, `install` skips the registration
+rather than failing, and prints the command and environment variable to
+give any other MCP client. **If no workspace resolves**, it refuses to
+register: a registration pointing at a server that exits on startup fails
+every session while `claude mcp list` reports it as configured.
+
+Project scope works too if you would rather commit the configuration:
+copy
+[`integration/claude-code/mcp.json.example`](integration/claude-code/mcp.json.example)
+to `.mcp.json` at your project root. Claude Code asks you to approve it
+the first time you open a session there.
+
+## 4. Verify
 
 ```bash
 cd /path/to/your-application
@@ -230,7 +273,7 @@ is the cause and the ones after it are symptoms:
 Warnings do not fail the run. They describe a system that works and may be
 answering the wrong question — which is yours to judge, not doctor's.
 
-## 7. Use it
+## 5. Use it
 
 ```bash
 cd /path/to/your-application
@@ -249,8 +292,8 @@ Engineering OS is never reached — see
 The index is a snapshot. After engineering documents change:
 
 ```bash
-eng sync ~/engineering-os      # incremental, uses git to find what changed
-eng index ~/engineering-os     # full re-index, when in doubt
+eng update ~/engineering-os     # incremental, uses git to find what changed
+eng index  ~/engineering-os     # full re-index, when in doubt
 ```
 
 Both cover every attached repository. Nothing detects staleness on its
@@ -258,15 +301,31 @@ own: a review against a stale index cites rules that may since have been
 superseded, with nothing in the output saying so. Re-indexing is still the
 developer's job.
 
+## Adding a repository later
+
+```bash
+eng setup ~/engineering-os --repo ~/code/another-application
+```
+
+`eng setup` is re-runnable. It attaches what is new, re-indexes what is
+not, and repoints Claude Code at the current binary. Or, directly:
+
+```bash
+cd ~/engineering-os && eng workspace attach ~/code/another-application
+```
+
 ## When something is wrong
 
 Run `eng doctor` first. Beyond that:
 
-**`replacement directory ../engineering-kernel does not exist`** — an old
-checkout with the removed `replace` directive. Pull, or see step 1.
-
 **`go.mod requires go >= 1.25.0`** — upgrade Go, or unset
 `GOTOOLCHAIN=local` and let Go fetch the toolchain.
+
+**`command not found: eng` right after a successful `go install`** —
+`$(go env GOPATH)/bin` is not on your `$PATH`.
+
+**`replacement directory ../engineering-kernel does not exist`** — an old
+checkout with the removed `replace` directive. Pull, or see step 1.
 
 **`no indexed workspace found at or above ...`** — you are outside every
 workspace and `ENGINEERING_WORKSPACE` is unset. Either is fixable; the
@@ -285,6 +344,9 @@ the workspace above it. Three such directories were found on one machine
 during Sprint 11, holding 64 documents and zero rules between them. The
 server prints which workspace it chose on stderr; `doctor` prints it too.
 
-**Claude Code never calls the tools** — check the `/review-branch` command
-is installed (step 5). This is the single most common cause and it looks
+**Claude Code launches a binary you rebuilt somewhere else** — run
+`engineering-mcp install` again.
+
+**Claude Code never calls the tools** — check the `/review-branch`
+command is installed. This is the single most common cause and it looks
 exactly like the server being broken.
