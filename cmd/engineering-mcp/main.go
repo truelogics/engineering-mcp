@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-kernel/pkg/memory"
 	"github.com/truelogics/engineering-mcp/internal/doctor"
 	"github.com/truelogics/engineering-mcp/internal/mcp"
 	"github.com/truelogics/engineering-mcp/internal/tools"
@@ -38,7 +38,7 @@ func main() {
 	// returns and the error branch below is dead code that looks handled.
 	fs := flag.NewFlagSet(serverName, flag.ContinueOnError)
 	workspaceFlag := fs.String("workspace", "",
-		"path to the indexed AI Memory workspace (default: the workspace containing the working directory, then $"+workspace.EnvVar+")")
+		"path to the indexed Engineering Kernel workspace (default: the workspace containing the working directory, then $"+workspace.EnvVar+")")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = usage(fs)
 	if err := fs.Parse(args); err != nil {

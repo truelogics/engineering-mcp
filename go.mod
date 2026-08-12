@@ -2,7 +2,7 @@ module github.com/truelogics/engineering-mcp
 
 go 1.25.0
 
-require github.com/truelogics/ai-memory v0.2.0
+require github.com/truelogics/engineering-kernel v0.3.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

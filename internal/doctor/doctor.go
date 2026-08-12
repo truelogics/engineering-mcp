@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-kernel/pkg/memory"
 	"github.com/truelogics/engineering-mcp/internal/workspace"
 )
 
@@ -172,30 +172,30 @@ func checkServerBinary(env Env) Check {
 	return Check{Name: "Engineering MCP", Status: StatusOK, Detail: onPath}
 }
 
-// checkEngCLI answers "is AI Memory available?". The library is linked
+// checkEngCLI answers "is the Engineering Kernel available?". The library is linked
 // into this binary and cannot be missing; the CLI can, and without it
 // nothing can be indexed, so that is the question worth asking.
 func checkEngCLI(ctx context.Context, env Env) Check {
 	path, err := env.LookPath("eng")
 	if err != nil {
 		return Check{
-			Name:   "AI Memory (eng)",
+			Name:   "Engineering Kernel (eng)",
 			Status: StatusFail,
 			Detail: "not on $PATH — nothing can be indexed without it",
-			Fix:    "go build -o ~/.local/bin/eng ../ai-memory/cmd/eng",
+			Fix:    "go build -o ~/.local/bin/eng ../engineering-kernel/cmd/eng",
 		}
 	}
 
 	out, err := env.Run(ctx, env.WorkingDir, path, "version")
 	if err != nil {
 		return Check{
-			Name:   "AI Memory (eng)",
+			Name:   "Engineering Kernel (eng)",
 			Status: StatusFail,
 			Detail: fmt.Sprintf("%s could not be run: %v\n%s", path, err, indent(out)),
-			Fix:    "rebuild it: go build -o ~/.local/bin/eng ../ai-memory/cmd/eng",
+			Fix:    "rebuild it: go build -o ~/.local/bin/eng ../engineering-kernel/cmd/eng",
 		}
 	}
-	return Check{Name: "AI Memory (eng)", Status: StatusOK, Detail: fmt.Sprintf("%s (%s)", firstLine(out), path)}
+	return Check{Name: "Engineering Kernel (eng)", Status: StatusOK, Detail: fmt.Sprintf("%s (%s)", firstLine(out), path)}
 }
 
 // sourceRegistration is not one of workspace.Resolve's own sources. It is

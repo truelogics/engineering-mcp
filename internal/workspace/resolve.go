@@ -1,4 +1,4 @@
-// Package workspace finds the indexed AI Memory workspace a server
+// Package workspace finds the indexed Engineering Kernel workspace a server
 // should answer from.
 //
 // This exists so one installed server works in every repository. A

@@ -13,7 +13,7 @@ over the Model Context Protocol.
 
 It reads engineering knowledge and answers questions about it. It does
 not review, plan, edit, or decide anything — the client does all of
-that. This is the second consumer of [`ai-memory`](../ai-memory/), and
+that. This is the second consumer of [`engineering-kernel`](../engineering-kernel/), and
 its purpose is as much to test the kernel as to be useful: a kernel that
 two unrelated consumers can build on is a platform, and a kernel only
 one can build on is an application with extra steps.
@@ -42,9 +42,9 @@ thing that is wrong.
 | Tool | Answers | Validated by |
 |---|---|---|
 | `search_memory` | "What has been written about this?" | `eng search` |
-| `get_context` | "What engineering context surrounds this task?" | AI Review's `Reviewer` |
-| `find_engineering_rules` | "What rules govern these files?" | AI Review, Sprint 7 |
-| `verify_evidence` | "Does this quote really appear in that document?" | AI Review's `Validator`; promoted to the kernel by RFC-0006 |
+| `get_context` | "What engineering context surrounds this task?" | Engineering Review's `Reviewer` |
+| `find_engineering_rules` | "What rules govern these files?" | Engineering Review, Sprint 7 |
+| `verify_evidence` | "Does this quote really appear in that document?" | Engineering Review's `Validator`; promoted to the kernel by RFC-0006 |
 
 Four, not five. Every tool here satisfies
 [`KERNEL_POLICY.md`](../engineering/KERNEL_POLICY.md) Rule #6 — it
@@ -56,12 +56,12 @@ deliberately absent.
 
 The fourth tool was originally proposed as `collect_evidence` and
 rejected. Checking that a quoted excerpt really appears in the document it
-cites was real, tested, and lived in AI Review's `Validator` and nowhere
+cites was real, tested, and lived in Engineering Review's `Validator` and nowhere
 else — so exposing it here meant either duplicating an anti-hallucination
 check, leaving two implementations to drift apart, or promoting it into
 the kernel.
 
-ai-memory RFC-0006 promoted it, and `verify_evidence` is now the four-line
+engineering-kernel RFC-0006 promoted it, and `verify_evidence` is now the four-line
 adapter that was predicted. It is named for what it does — verifying a
 quote a client proposes — rather than `collect_evidence`, which would
 imply the kernel searches for supporting text. It does not, and no
@@ -75,7 +75,7 @@ kernel adopts it, transport exposes it. Not transport invents it.
 `ContextPackage` collapses five distinct retrieval groups —
 Architecture, RFCs, Roadmap, Documentation, Other — into one
 `RelevantFiles` list before a consumer sees them
-(`ai-review/KERNEL_REQUIREMENTS.md` #16). The kernel's retriever makes
+(`engineering-review/KERNEL_REQUIREMENTS.md` #16). The kernel's retriever makes
 the distinction; its public surface discards it.
 
 A tool named `get_architecture_context` would therefore return
@@ -87,9 +87,9 @@ not overclaim.
 
 ## Requirements
 
-Go 1.25+, git, and an indexed AI Memory workspace. The server never
+Go 1.25+, git, and an indexed Engineering Kernel workspace. The server never
 indexes anything — it reads what `eng` has already built. It depends on a
-released `ai-memory`, so this repository builds from a clone of its own;
+released `engineering-kernel`, so this repository builds from a clone of its own;
 use a `go.work` when changing both at once (see `INSTALL.md`).
 
 ## Running it
@@ -149,6 +149,6 @@ The Engineering OS supplies knowledge.
 
 | Repo | Role |
 |------|------|
-| [`ai-memory/`](../ai-memory/) | The kernel this exposes |
-| [`ai-review/`](../ai-review/) | The first consumer; validated these capabilities |
+| [`engineering-kernel/`](../engineering-kernel/) | The kernel this exposes |
+| [`engineering-review/`](../engineering-review/) | The first consumer; validated these capabilities |
 | [`engineering/`](../engineering/) | Standards, rules, and `CAPABILITIES.md` |

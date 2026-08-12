@@ -8,6 +8,13 @@ last_reviewed: 2026-08-09
 
 # Dogfood log
 
+> **A note on repository names.** On 2026-08-12 `ai-memory` was renamed
+> `engineering-kernel` and `ai-review` became `engineering-review`. Entries
+> below are left as they were written. They are dated accounts of what
+> happened under the names that existed then, and rewriting a record to
+> match the present would quietly falsify the evidence this project's
+> decisions rest on. Read `ai-memory` as `engineering-kernel` throughout.
+
 Sprint 11 Milestone 5: run the workflow on real repositories and record
 what happened. Observations only — fixes belong to a later sprint, once
 there is enough here to see a pattern rather than a coincidence.

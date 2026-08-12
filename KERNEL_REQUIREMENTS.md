@@ -9,8 +9,8 @@ last_reviewed: 2026-08-09
 # Kernel Requirements
 
 The kernel is consumer-driven (`engineering:KERNEL_POLICY.md` Rule #1), so
-each consumer keeps its own list. This is the second consumer's; AI Review's
-is at `ai-review/KERNEL_REQUIREMENTS.md`.
+each consumer keeps its own list. This is the second consumer's; Engineering Review's
+is at `engineering-review/KERNEL_REQUIREMENTS.md`.
 
 Everything here was reproduced against the running kernel before it was
 written down. A requirement is not recorded until the gap has been
@@ -22,7 +22,7 @@ Rule, a consumer that discovers a kernel limitation records it and stops.
 
 ## 1. ~~`Search` passes its query to FTS5 unescaped, so a hyphen is a crash~~ — RESOLVED (Sprint 11)
 
-Fixed in `ai-memory` by `search.UserQuery`, applied at the two points raw
+Fixed in `engineering-kernel` by `search.UserQuery`, applied at the two points raw
 human text enters (`pkg/memory.Search`, `eng search`). Kept below because
 the shape of the miss is the useful part: the kernel had solved this once
 on the retriever path and the neighbouring path never got the fix.
@@ -54,7 +54,7 @@ path already carries.
 
 ## 2. Evidence can only verify the top chunk's highlight — second sighting
 
-This is `ai-review/KERNEL_REQUIREMENTS.md` #15 (`ContextPackage`'s `Snippet`
+This is `engineering-review/KERNEL_REQUIREMENTS.md` #15 (`ContextPackage`'s `Snippet`
 is a truncated FTS5 highlight, not source content) reaching a second,
 independent consumer. Recording the new detail rather than restating it.
 
@@ -80,17 +80,17 @@ practice demands — gets NOT VERIFIED.
 The consequence is not a missing feature but an inverted incentive. A
 verification gate that fails closed on true citations teaches a consumer to
 stop citing, which is the opposite of what the Evidence capability was
-promoted into the kernel to achieve (`ai-memory/rfcs/0006`).
+promoted into the kernel to achieve (`engineering-kernel/rfcs/0006`).
 
 **What's needed:** the ability to verify an excerpt against a document's
-source content, not against one retrieved highlight. `ai-review`'s #14 and
+source content, not against one retrieved highlight. `engineering-review`'s #14 and
 #15 describe the same underlying shortfall from the review side.
 
 **Not needed:** a workaround here. This repository now tells its client the
 difference between "unchecked" and "checked but unverifiable" and forbids
 silently dropping the latter, which is a disclosure, not a substitute.
 
-## 3. ~~The `doc:` taxonomy is closed, so most organizational documents are unclassifiable~~ — RESOLVED (Sprint 13, ai-memory RFC-0007)
+## 3. ~~The `doc:` taxonomy is closed, so most organizational documents are unclassifiable~~ — RESOLVED (Sprint 13, engineering-kernel RFC-0007)
 
 A repository now states what its own directories hold, in a
 `.engineering.yaml` that lives in the repository and maps path globs onto

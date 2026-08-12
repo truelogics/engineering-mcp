@@ -23,7 +23,7 @@ Two binaries and one index.
 
 | | What it is | Who runs it |
 |---|---|---|
-| `eng` | the AI Memory CLI: builds and maintains the index | you |
+| `eng` | the Engineering Kernel CLI: builds and maintains the index | you |
 | `engineering-mcp` | serves that index to an MCP client over stdio | Claude Code |
 | `.eng/memory.db` | the index itself, one per workspace | neither; it is data |
 
@@ -54,15 +54,15 @@ Subsequent builds are seconds.
 ```bash
 mkdir -p ~/engineering-os && cd ~/engineering-os
 
-git clone git@github.com:truelogics/ai-memory.git
+git clone git@github.com:truelogics/engineering-kernel.git
 git clone git@github.com:truelogics/engineering-mcp.git
 git clone git@github.com:truelogics/engineering.git
 ```
 
 The directory names no longer matter, and for a while they did.
-`engineering-mcp/go.mod` used to carry `replace … => ../ai-memory`, so
-the kernel was resolved by path: a clone under any other name, or
-anywhere not adjacent, failed with `replacement directory ../ai-memory
+`engineering-mcp/go.mod` used to carry a `replace` pointing at a sibling
+directory, so the kernel was resolved by path: a clone under any other
+name, or anywhere not adjacent, failed with `replacement directory ...
 does not exist` — accurate, and meaningless the first time you meet it.
 It now depends on a released version, so each repository builds alone.
 
@@ -71,7 +71,7 @@ the directory containing them so your local kernel edits are visible to
 the server without a release:
 
 ```bash
-cd ~/engineering-os && go work init ./ai-memory ./engineering-mcp
+cd ~/engineering-os && go work init ./engineering-kernel ./engineering-mcp
 ```
 
 Do not commit it to either repository — it belongs to your machine, and
@@ -87,7 +87,7 @@ be a separate repository; it needs to exist.
 
 ```bash
 mkdir -p ~/.local/bin
-(cd ~/engineering-os/ai-memory       && go build -o ~/.local/bin/eng ./cmd/eng)
+(cd ~/engineering-os/engineering-kernel       && go build -o ~/.local/bin/eng ./cmd/eng)
 (cd ~/engineering-os/engineering-mcp && go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp)
 ```
 
@@ -101,7 +101,7 @@ export PATH="$HOME/.local/bin:$PATH"
 Check both:
 
 ```bash
-eng version                 # eng version 0.2.0
+eng version                 # eng version v0.3.0
 engineering-mcp --version   # engineering-mcp 0.1.0-alpha
 ```
 
@@ -219,7 +219,7 @@ is the cause and the ones after it are symptoms:
 | Check | Answers |
 |---|---|
 | Engineering MCP | is the binary installed, and is it the one on `PATH`? |
-| AI Memory (`eng`) | is the CLI available? |
+| Engineering Kernel (`eng`) | is the CLI available? |
 | Workspace | which workspace answers here, and why? |
 | Workspace index | which repositories are in it — including this one? |
 | Engineering knowledge | given real files from this repository, does the rulebook have anything to say? |
@@ -262,7 +262,7 @@ developer's job.
 
 Run `eng doctor` first. Beyond that:
 
-**`replacement directory ../ai-memory does not exist`** — an old
+**`replacement directory ../engineering-kernel does not exist`** — an old
 checkout with the removed `replace` directive. Pull, or see step 1.
 
 **`go.mod requires go >= 1.25.0`** — upgrade Go, or unset

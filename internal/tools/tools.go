@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-kernel/pkg/memory"
 	"github.com/truelogics/engineering-mcp/internal/mcp"
 )
 
@@ -42,14 +42,14 @@ func All(src KnowledgeSource, workspace string) []mcp.Tool {
 	}
 }
 
-// verifyEvidence exposes ai-memory RFC-0006's Evidence capability,
+// verifyEvidence exposes engineering-kernel RFC-0006's Evidence capability,
 // promoted into the kernel precisely so this tool could exist without
-// duplicating AI Review's Validator. It is named for what it does —
+// duplicating Engineering Review's Validator. It is named for what it does —
 // verifying a quote a client proposes — rather than "collect_evidence",
 // which would imply the kernel searches for supporting text. It does
 // not, and no consumer has asked it to (KERNEL_POLICY Rule #5).
 //
-// Where AI Review silently drops an unverifiable claim because a review
+// Where Engineering Review silently drops an unverifiable claim because a review
 // is finished, this reports the failure: a model can revise, and being
 // told a quote didn't check out is the most useful answer it can get.
 func verifyEvidence(src KnowledgeSource) mcp.Tool {

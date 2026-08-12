@@ -20,7 +20,7 @@ You need [Go 1.25 or newer](https://go.dev/dl/), git, and
 ```bash
 mkdir -p ~/engineering-os && cd ~/engineering-os
 
-git clone git@github.com:truelogics/ai-memory.git
+git clone git@github.com:truelogics/engineering-kernel.git
 git clone git@github.com:truelogics/engineering-mcp.git
 git clone git@github.com:truelogics/engineering.git     # your rulebook
 ```
@@ -33,7 +33,7 @@ to say.
 
 ```bash
 mkdir -p ~/.local/bin
-(cd ai-memory       && go build -o ~/.local/bin/eng ./cmd/eng)
+(cd engineering-kernel       && go build -o ~/.local/bin/eng ./cmd/eng)
 (cd engineering-mcp && go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp)
 export PATH="$HOME/.local/bin:$PATH"        # add to your shell profile
 ```

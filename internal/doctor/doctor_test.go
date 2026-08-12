@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-kernel/pkg/memory"
 )
 
 // fakeKnowledge is a workspace that returns whatever the test says it
@@ -172,7 +172,7 @@ func TestEngMissingIsFatal(t *testing.T) {
 		return inner(file)
 	}
 
-	c := byName(t, Run(context.Background(), env), "AI Memory (eng)")
+	c := byName(t, Run(context.Background(), env), "Engineering Kernel (eng)")
 	if c.Status != StatusFail {
 		t.Errorf("status = %q, want fail", c.Status)
 	}

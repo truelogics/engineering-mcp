@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-kernel/pkg/memory"
 	"github.com/truelogics/engineering-mcp/internal/workspace"
 )
 

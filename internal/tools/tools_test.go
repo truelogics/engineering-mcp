@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/truelogics/ai-memory/pkg/memory"
+	"github.com/truelogics/engineering-kernel/pkg/memory"
 )
 
 type fakeSource struct {
@@ -67,13 +67,13 @@ func TestEveryToolAdvertisesADescriptionAndSchema(t *testing.T) {
 func TestSearchMemoryQualifiesResultsByRepository(t *testing.T) {
 	src := &fakeSource{searchResults: []memory.SearchResult{
 		{Path: "README.md", Repository: "engineering", Score: 0.8, Snippet: "the **rules** index"},
-		{Path: "README.md", Repository: "ai-review", Score: 0.4, Snippet: "the review engine"},
+		{Path: "README.md", Repository: "engineering-review", Score: 0.4, Snippet: "the review engine"},
 	}}
 	got, err := toolNamed(t, src, "search_memory")(context.Background(), json.RawMessage(`{"query":"rules"}`))
 	if err != nil {
 		t.Fatalf("search_memory: %v", err)
 	}
-	for _, want := range []string{"engineering:README.md", "ai-review:README.md"} {
+	for _, want := range []string{"engineering:README.md", "engineering-review:README.md"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q — two repositories' README.md must be distinguishable:\n%s", want, got)
 		}
@@ -211,7 +211,7 @@ func TestVerifyEvidenceConfirmsARealQuote(t *testing.T) {
 }
 
 // TestVerifyEvidenceReportsFailureRatherThanDropping is the policy
-// difference from AI Review: a review drops an unverifiable claim
+// difference from Engineering Review: a review drops an unverifiable claim
 // silently because it is finished; a model can revise, so it is told.
 func TestVerifyEvidenceReportsFailureRatherThanDropping(t *testing.T) {
 	src := &fakeSource{pkg: memory.ContextPackage{Rules: []memory.FileContext{
