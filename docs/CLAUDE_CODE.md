@@ -3,7 +3,7 @@ doc: RUNBOOK
 audience: [human, agent]
 status: living
 owner: engineering-mcp
-last_reviewed: 2026-08-10
+last_reviewed: 2026-08-12
 ---
 
 # Engineering OS in Claude Code
@@ -12,17 +12,30 @@ Everything about the Claude Code side: registering the server, checking it
 works, what a normal session looks like, and what to do when it goes
 quiet.
 
-Building the binaries and indexing a workspace comes first —
-[`INSTALL.md`](../INSTALL.md).
+Installing the binaries and indexing a workspace comes first —
+[`QUICKSTART.md`](../QUICKSTART.md) for the three-command version,
+[`INSTALL.md`](../INSTALL.md) for the long one.
 
 ## Registration
 
-Once, at user scope, for every project on the machine:
+Both steps on this page are done for you by:
+
+```bash
+engineering-mcp install       # or `eng setup`, which calls it
+```
+
+Run it again after rebuilding to a different location — otherwise Claude
+Code keeps launching the binary it was registered with. The rest of this
+page is what it does and why, which is what you need when it has not
+worked.
+
+The registration is made once, at user scope, for every project on the
+machine — the equivalent of:
 
 ```bash
 claude mcp add engineering --scope user \
   -e ENGINEERING_WORKSPACE="$HOME/engineering-os" \
-  -- "$HOME/.local/bin/engineering-mcp"
+  -- "$HOME/go/bin/engineering-mcp"
 ```
 
 Two arguments are doing real work.
@@ -45,6 +58,13 @@ Project scope instead, if you would rather commit the configuration: copy
 `.mcp.json` at your project root and approve it when Claude Code asks.
 
 ## The command that makes the tools reachable
+
+```bash
+engineering-mcp install
+```
+
+which writes `~/.claude/commands/review-branch.md` from a copy embedded
+in the binary. By hand, from a clone:
 
 ```bash
 mkdir -p ~/.claude/commands

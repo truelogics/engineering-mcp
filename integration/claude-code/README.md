@@ -26,10 +26,24 @@ file named for an integration they had not heard of yet.
 The short version:
 
 ```bash
+engineering-mcp install       # or: eng setup, which calls it
+```
+
+`review-branch.md` is compiled into the binary (see
+[`../integration.go`](../integration.go)), so `install` writes it from
+there rather than from this directory — which is what makes it work for
+someone who installed with `go install` and has no clone.
+
+By hand, if you would rather:
+
+```bash
 mkdir -p ~/.claude/commands
 cp review-branch.md ~/.claude/commands/      # every project
 # or: cp review-branch.md .claude/commands/  # this project only
 ```
+
+Editing your copy is supported: `install` leaves a file that differs from
+the embedded one alone, and says so, unless you pass `--force`.
 
 ## Why `review-branch.md` is not optional
 

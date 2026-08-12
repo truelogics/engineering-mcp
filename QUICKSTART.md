@@ -3,93 +3,49 @@ doc: RUNBOOK
 audience: [human]
 status: living
 owner: engineering-mcp
-last_reviewed: 2026-08-10
+last_reviewed: 2026-08-12
 ---
 
 # Quickstart
 
-Ten minutes, from nothing to a review that cites your organization's own
-engineering decisions.
+Three commands, from nothing to a review that cites your organization's
+own engineering decisions.
 
 You need [Go 1.25 or newer](https://go.dev/dl/), git, and
-[Claude Code](https://claude.com/claude-code). If something below fails,
-[`INSTALL.md`](INSTALL.md) explains each step and what it produces.
+[Claude Code](https://claude.com/claude-code).
 
-## 1. Clone
+## 1. Install `eng`
 
 ```bash
-mkdir -p ~/engineering-os && cd ~/engineering-os
-
-git clone git@github.com:truelogics/engineering-kernel.git
-git clone git@github.com:truelogics/engineering-mcp.git
-git clone git@github.com:truelogics/engineering.git     # your rulebook
+go install github.com/truelogics/engineering-kernel/cmd/eng@latest
+export PATH="$(go env GOPATH)/bin:$PATH"        # add to your shell profile
 ```
 
-The third one is whichever repository holds your organization's rules,
-ADRs and standards. Without it the tools work perfectly and have nothing
-to say.
+Nothing to clone. `eng` is the shell of the Engineering OS; it installs
+the rest.
 
-## 2. Build
+## 2. Set it up
 
 ```bash
-mkdir -p ~/.local/bin
-(cd engineering-kernel       && go build -o ~/.local/bin/eng ./cmd/eng)
-(cd engineering-mcp && go build -o ~/.local/bin/engineering-mcp ./cmd/engineering-mcp)
-export PATH="$HOME/.local/bin:$PATH"        # add to your shell profile
+eng setup ~/engineering-os \
+  --rules git@github.com:truelogics/engineering.git \
+  --repo  ~/code/your-application
 ```
 
-## 3. Index
+That one command creates the workspace, clones and indexes what you
+named, installs `engineering-mcp`, registers it with Claude Code, and
+installs the `/review-branch` command.
+
+`--rules` is whichever repository holds your organization's rules, ADRs
+and standards. Without it the tools work perfectly and have nothing to
+say. `--rules` and `--repo` take a local path or a git URL and may be
+repeated.
+
+## 3. Use it
 
 ```bash
-cd ~/engineering-os
-eng workspace create .
-eng workspace detach .                      # the root is a container, not a repository
-eng workspace attach ./engineering          # the rulebook
-eng workspace attach /path/to/your-application
-```
-
-`attach` indexes as it goes; there is no separate index step on first
-setup.
-
-## 4. Register with Claude Code
-
-Once, for every project you will ever open:
-
-```bash
-claude mcp add engineering --scope user \
-  -e ENGINEERING_WORKSPACE="$HOME/engineering-os" \
-  -- "$HOME/.local/bin/engineering-mcp"
-```
-
-## 5. Install the review command
-
-```bash
-mkdir -p ~/.claude/commands
-cp ~/engineering-os/engineering-mcp/integration/claude-code/review-branch.md ~/.claude/commands/
-```
-
-Not optional. On a machine with several MCP servers installed, tool
-schemas are deferred and a tool is unreachable until something names it —
-this command is what names these four. See
-[`docs/reports/TOOL_DISCOVERY_EXPERIMENT.md`](docs/reports/TOOL_DISCOVERY_EXPERIMENT.md).
-
-## 6. Check it
-
-```bash
-eng doctor
-```
-
-Eight checks, in the order the system is layered. Fix the first `✘`; the
-ones below it are usually its symptoms.
-
-`eng` is the entry point to all of Engineering OS (RFC-0008); `eng doctor`
-runs `engineering-mcp doctor` for you, so you never have to know which
-repository answers which question.
-
-## 7. Use it
-
-```bash
-cd /path/to/your-application
+cd ~/code/your-application
+eng doctor        # eight checks, ordered the way the system is layered
 claude
 ```
 
@@ -99,9 +55,9 @@ Claude Code works out the branch, base and changed files from git, asks
 Engineering OS which rules govern those files and what has been decided
 around them, and then reviews.
 
-**Type the command, not a sentence.** Asking *"Review my current branch."*
-in plain language works only if nothing else claims it. Measured on this
-repository, on the same commit, minutes apart:
+**Type the command, not a sentence.** Asking *"Review my current
+branch."* in plain language works only if nothing else claims it.
+Measured on this repository, on the same commit, minutes apart:
 
 | Asked as | Skill that ran | Engineering MCP calls |
 |---|---|---|
@@ -110,10 +66,32 @@ repository, on the same commit, minutes apart:
 
 Both produced a review. Only one consulted the organization's knowledge.
 
+## Keeping it current
+
+The index is a snapshot, and nothing detects staleness on its own. After
+your engineering documents change:
+
+```bash
+eng update ~/engineering-os
+```
+
+## When something is wrong
+
+`eng doctor` first, from inside the repository you are working in. It
+checks the binaries, the workspace, the index, retrieval, the Claude Code
+registration, the protocol handshake and the `/review-branch` command,
+and names the first thing that is broken. Fix the first `✘`; the ones
+below it are usually its symptoms.
+
+`eng setup` is safe to re-run — that is how you add a repository, or
+repoint Claude Code after rebuilding.
+
 ## Next
 
-- Nothing is retrieved from your application's own documents until you
-  attach it and, usually, tell it what its directories mean —
-  [`ONBOARDING.md`](ONBOARDING.md).
-- The Claude Code side in detail, including what to do when it goes
-  quiet — [`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md).
+- [`INSTALL.md`](INSTALL.md) — the same install with what each step
+  produces, what goes wrong, and how to do it by hand.
+- [`ONBOARDING.md`](ONBOARDING.md) — nothing is retrieved from your
+  application's own documents until you tell it what its directories
+  mean.
+- [`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md) — the Claude Code side in
+  detail, including what to do when it goes quiet.

@@ -27,15 +27,29 @@ MCP, and nothing in `internal/mcp` knows what a rule is.
 
 ## Getting started
 
+```bash
+go install github.com/truelogics/engineering-kernel/cmd/eng@latest
+export PATH="$(go env GOPATH)/bin:$PATH"        # in your shell profile
+
+eng setup ~/engineering-os \
+  --rules git@github.com:truelogics/engineering.git \
+  --repo  ~/code/your-application
+```
+
+That installs this server too, registers it with Claude Code, and
+installs the `/review-branch` command. Then, in your application:
+`eng doctor`, `claude`, and type `/review-branch`.
+
 | | |
 |---|---|
-| [`QUICKSTART.md`](QUICKSTART.md) | ten minutes, from nothing to a repository-aware review |
-| [`INSTALL.md`](INSTALL.md) | the same install with what each step produces and what goes wrong |
+| [`QUICKSTART.md`](QUICKSTART.md) | the above, with what to expect |
+| [`INSTALL.md`](INSTALL.md) | the same install with what each step produces, what goes wrong, and how to do it by hand |
 | [`ONBOARDING.md`](ONBOARDING.md) | making one repository Engineering OS aware |
 | [`docs/CLAUDE_CODE.md`](docs/CLAUDE_CODE.md) | the Claude Code side: registering, verifying, troubleshooting |
 
 `engineering-mcp doctor` checks a machine end to end and names the first
-thing that is wrong.
+thing that is wrong. `engineering-mcp install` fixes the Claude Code half
+of it.
 
 ## The tools
 
@@ -95,12 +109,17 @@ use a `go.work` when changing both at once (see `INSTALL.md`).
 ## Running it
 
 ```bash
-go build -o engineering-mcp ./cmd/engineering-mcp
+go install github.com/truelogics/engineering-mcp/cmd/engineering-mcp@latest
 
-./engineering-mcp                                  # serve; resolves a workspace itself
-./engineering-mcp --workspace /path/to/workspace   # serve a named workspace
-./engineering-mcp doctor                           # check this machine
+engineering-mcp                                  # serve; resolves a workspace itself
+engineering-mcp --workspace /path/to/workspace   # serve a named workspace
+engineering-mcp install                          # register with Claude Code, install /review-branch
+engineering-mcp doctor                           # check this machine
 ```
+
+`install` is what `eng setup` calls, and what to run yourself after
+rebuilding to a new location — otherwise Claude Code keeps launching the
+old binary. It is idempotent.
 
 With no `--workspace`, it resolves one at startup: the nearest workspace
 at or above the working directory, then `$ENGINEERING_WORKSPACE`. That is
